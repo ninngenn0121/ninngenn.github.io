@@ -18,14 +18,36 @@
     .login-box button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
 
     /* メインレイアウト */
-    #sidebar { width: 250px; background: #2f3136; color: white; padding: 15px; display: flex; flex-direction: column; gap: 20px; }
+    #sidebar { width: 260px; background: #2f3136; color: white; padding: 15px; display: flex; flex-direction: column; gap: 20px; }
     #main-chat { flex: 1; display: flex; flex-direction: column; background: white; }
     
     h3 { font-size: 14px; text-transform: uppercase; color: #8e9297; margin-bottom: 8px; }
     ul { list-style: none; }
-    li { padding: 8px 12px; border-radius: 4px; cursor: pointer; margin-bottom: 4px; color: #dcddde; }
+    li { 
+      padding: 8px 12px; 
+      border-radius: 4px; 
+      cursor: pointer; 
+      margin-bottom: 4px; 
+      color: #dcddde; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+    }
     li:hover, li.active { background: #393c43; color: white; }
     
+    /* 未読通知バッジのスタイル */
+    .badge {
+      background-color: #f23f43;
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+      padding: 2px 7px;
+      border-radius: 10px;
+      min-width: 18px;
+      text-align: center;
+      display: inline-block;
+    }
+
     /* チャットエリア */
     #chat-header { padding: 15px; border-bottom: 1px solid #e3e5e8; font-weight: bold; font-size: 18px; }
     #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
@@ -56,8 +78,14 @@
     <div>
       <h3>チャンネル</h3>
       <ul>
-        <li id="room-general" class="active" onclick="switchRoom('general')"># general</li>
-        <li id="room-random" onclick="switchRoom('random')"># random</li>
+        <li id="room-general" class="active" onclick="switchRoom('general')">
+          <span># general</span>
+          <span class="badge" id="badge-general" style="display: none;">0</span>
+        </li>
+        <li id="room-random" onclick="switchRoom('random')">
+          <span># random</span>
+          <span class="badge" id="badge-random" style="display: none;">0</span>
+        </li>
       </ul>
     </div>
     <div>
@@ -84,11 +112,11 @@
     let myUsername = "";
     let currentRoom = "general";
     
-    // 部屋ごとの会話履歴を保存するメモリデータ { "general": [...], "DM_xxx": [...] }
-    const messageHistory = {
-      "general": [],
-      "random": []
-    };
+    // 部屋ごとの会話履歴
+    const messageHistory = { "general": [], "random": [] };
+    
+    // 部屋ごとの未読件数を管理するデータ { "general": 0, "DM_xxx": 2 }
+    const unreadCounts = {};
 
     // ログイン処理
     function login() {
@@ -99,29 +127,28 @@
       myUsername = name;
       document.getElementById('login-screen').style.display = 'none';
 
-      // サーバーにユーザー登録
       socket.emit('register user', myUsername);
-      
-      // 最初は general 部屋に入る
       socket.emit('join room', 'general');
     }
 
     // 部屋切り替え処理
     function switchRoom(targetRoom) {
       currentRoom = targetRoom;
-      
-      // サーバーへ部屋参加を通知
       socket.emit('join room', currentRoom);
 
-      // 履歴がなければ初期化
       if (!messageHistory[currentRoom]) {
         messageHistory[currentRoom] = [];
       }
 
+      // 🌟 開いた部屋の未読カウントをリセット（0にして消す）
+      unreadCounts[currentRoom] = 0;
+      updateBadgeUI(currentRoom);
+
       // ヘッダー表示の更新
       const header = document.getElementById('chat-header');
-      if (targetRoom.startsWith("DM_")) {
-        const otherUser = targetRoom.replace("DM_", "").replace(myUsername, "").replace("_", "");
+      if (targetRoom.includes("_DM_")) {
+        const usersInDM = targetRoom.split("_DM_");
+        const otherUser = usersInDM.find(u => u !== myUsername);
         header.textContent = `💬 ${otherUser} とのDM`;
       } else {
         header.textContent = `# ${targetRoom}`;
@@ -132,13 +159,12 @@
       const activeEl = document.getElementById(`room-${targetRoom}`);
       if (activeEl) activeEl.classList.add('active');
 
-      // 画面のメッセージを再描画（履歴から復元）
       renderMessages();
     }
 
-    // DMを開始する部屋名を計算（アルファベット順に繋げて共通の部屋名を作る）
+    // DMを開始する部屋名を計算
     function startDM(targetUser) {
-      if (targetUser === myUsername) return; // 自分自身には送信不可
+      if (targetUser === myUsername) return;
       const dmRoomName = [myUsername, targetUser].sort().join("_DM_");
       switchRoom(dmRoomName);
     }
@@ -150,7 +176,6 @@
       const text = input.value.trim();
       if (!text) return;
 
-      // サーバーに送信
       socket.emit('chat message', {
         text: text,
         targetRoom: currentRoom
@@ -163,22 +188,40 @@
     socket.on('chat message', (data) => {
       const room = data.targetRoom;
 
-      // 該当の部屋の履歴に追加
+      // 履歴がなければ作成して保存（開いていなくても裏で保存される）
       if (!messageHistory[room]) {
         messageHistory[room] = [];
       }
       messageHistory[room].push(data);
 
-      // 今開いている部屋のメッセージなら画面を更新
       if (room === currentRoom) {
+        // 今見ている部屋なら画面を更新
         renderMessages();
+      } else {
+        // 🌟 見ていない部屋なら未読カウントを＋1してバッジを更新！
+        unreadCounts[room] = (unreadCounts[room] || 0) + 1;
+        updateBadgeUI(room);
       }
     });
 
-    // メッセージを画面に描画する関数
+    // バッジ（数字）の表示を更新する関数
+    function updateBadgeUI(room) {
+      const badgeEl = document.getElementById(`badge-${room}`);
+      if (!badgeEl) return;
+
+      const count = unreadCounts[room] || 0;
+      if (count > 0) {
+        badgeEl.textContent = count;
+        badgeEl.style.display = 'inline-block'; // 表示
+      } else {
+        badgeEl.style.display = 'none'; // 0件なら隠す
+      }
+    }
+
+    // メッセージ描画
     function renderMessages() {
       const messagesContainer = document.getElementById('messages');
-      messagesContainer.innerHTML = ''; // 一旦クリア
+      messagesContainer.innerHTML = '';
 
       const history = messageHistory[currentRoom] || [];
       history.forEach(msg => {
@@ -193,7 +236,6 @@
         messagesContainer.appendChild(div);
       });
 
-      // 一番下まで自動スクロール
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
@@ -203,13 +245,28 @@
       userList.innerHTML = '';
 
       Object.values(users).forEach(username => {
-        if (username === myUsername) return; // 自分はリストから除外
+        if (username === myUsername) return;
 
-        const li = document.createElement('li');
         const dmRoomName = [myUsername, username].sort().join("_DM_");
+        const li = document.createElement('li');
         li.id = `room-${dmRoomName}`;
-        li.textContent = `👤 ${username}`;
         li.onclick = () => startDM(username);
+
+        // 名前のテキスト部分
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = `👤 ${username}`;
+
+        // 未読バッジ部分
+        const badgeSpan = document.createElement('span');
+        badgeSpan.className = 'badge';
+        badgeSpan.id = `badge-${dmRoomName}`;
+        
+        const count = unreadCounts[dmRoomName] || 0;
+        badgeSpan.textContent = count;
+        if (count === 0) badgeSpan.style.display = 'none';
+
+        li.appendChild(nameSpan);
+        li.appendChild(badgeSpan);
 
         if (currentRoom === dmRoomName) {
           li.classList.add('active');
@@ -218,7 +275,7 @@
       });
     });
 
-    // エスケープ処理（セキュリティ対策）
+    // エスケープ処理
     function escapeHtml(str) {
       return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
