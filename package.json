@@ -1,7 +1,7 @@
 {
   "name": "chat-app",
   "version": "1.0.0",
-  "description": "Socket.io Chat App",
+  "description": "Realtime Chat Application with Admin Mode",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
