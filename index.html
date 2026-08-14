@@ -8,7 +8,6 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: sans-serif; display: flex; height: 100vh; background: #f0f2f5; }
     
-    /* ログイン画面 */
     #login-screen {
       position: fixed; inset: 0; background: rgba(0,0,0,0.6);
       display: flex; justify-content: center; align-items: center; z-index: 100;
@@ -17,45 +16,53 @@
     .login-box input { padding: 10px; width: 80%; margin: 10px 0; font-size: 16px; }
     .login-box button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
 
-    /* メインレイアウト */
     #sidebar { width: 260px; background: #2f3136; color: white; padding: 15px; display: flex; flex-direction: column; gap: 20px; }
     #main-chat { flex: 1; display: flex; flex-direction: column; background: white; }
     
     h3 { font-size: 14px; text-transform: uppercase; color: #8e9297; margin-bottom: 8px; }
     ul { list-style: none; }
     li { 
-      padding: 8px 12px; 
-      border-radius: 4px; 
-      cursor: pointer; 
-      margin-bottom: 4px; 
-      color: #dcddde; 
-      display: flex; 
-      justify-content: space-between; 
-      align-items: center; 
+      padding: 8px 12px; border-radius: 4px; cursor: pointer; margin-bottom: 4px; color: #dcddde; 
+      display: flex; justify-content: space-between; align-items: center; 
     }
     li:hover, li.active { background: #393c43; color: white; }
     
-    /* 未読通知バッジのスタイル */
     .badge {
-      background-color: #f23f43;
-      color: white;
-      font-size: 12px;
-      font-weight: bold;
-      padding: 2px 7px;
-      border-radius: 10px;
-      min-width: 18px;
-      text-align: center;
-      display: inline-block;
+      background-color: #f23f43; color: white; font-size: 12px; font-weight: bold;
+      padding: 2px 7px; border-radius: 10px; min-width: 18px; text-align: center; display: inline-block;
     }
 
-    /* チャットエリア */
     #chat-header { padding: 15px; border-bottom: 1px solid #e3e5e8; font-weight: bold; font-size: 18px; }
     #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-    .message { padding: 8px 12px; background: #e4e6eb; border-radius: 8px; max-width: 70%; word-break: break-all; }
+    
+    /* メッセージ吹き出しのデザイン */
+    .message { 
+      padding: 8px 12px; background: #e4e6eb; border-radius: 8px; max-width: 70%; word-break: break-all; 
+      position: relative; display: flex; flex-direction: column;
+    }
     .message.my-msg { background: #0084ff; color: white; align-self: flex-end; }
     .message .sender { font-size: 12px; opacity: 0.7; margin-bottom: 2px; }
+    .message .text { font-size: 15px; }
 
-    /* 送信フォーム */
+    /* 🌟 うっすら表示する時間＆編集状態のスタイル */
+    .msg-footer {
+      display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 4px;
+    }
+    .msg-time {
+      font-size: 10px; opacity: 0.45; /* かなり薄めの文字色 */
+    }
+    .edited-mark {
+      font-size: 10px; opacity: 0.45; margin-right: 2px;
+    }
+
+    /* 🌟 編集ボタン（自分の投稿だけに表示） */
+    .edit-btn {
+      background: none; border: none; color: inherit; opacity: 0.5; font-size: 11px;
+      cursor: pointer; text-decoration: underline; padding: 0; display: none;
+    }
+    .message:hover .edit-btn { display: inline; } /* ホバー時にうっすら表示 */
+    .edit-btn:hover { opacity: 1; }
+
     #form { padding: 15px; border-top: 1px solid #e3e5e8; display: flex; gap: 10px; }
     #input { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 20px; outline: none; font-size: 16px; }
     #form button { padding: 10px 20px; background: #0084ff; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 16px; }
@@ -63,7 +70,6 @@
 </head>
 <body>
 
-  <!-- ログインモーダル -->
   <div id="login-screen">
     <div class="login-box">
       <h2>チャットに参加</h2>
@@ -73,7 +79,6 @@
     </div>
   </div>
 
-  <!-- サイドバー -->
   <div id="sidebar">
     <div>
       <h3>チャンネル</h3>
@@ -94,7 +99,6 @@
     </div>
   </div>
 
-  <!-- チャットメインエリア -->
   <div id="main-chat">
     <div id="chat-header"># general</div>
     <div id="messages"></div>
@@ -104,7 +108,6 @@
     </form>
   </div>
 
-  <!-- Socket.ioライブラリ -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
     const socket = io(window.location.origin);
@@ -112,13 +115,9 @@
     let myUsername = "";
     let currentRoom = "general";
     
-    // 部屋ごとの会話履歴
     const messageHistory = { "general": [], "random": [] };
-    
-    // 部屋ごとの未読件数を管理するデータ { "general": 0, "DM_xxx": 2 }
     const unreadCounts = {};
 
-    // ログイン処理
     function login() {
       const input = document.getElementById('username-input');
       const name = input.value.trim();
@@ -131,7 +130,6 @@
       socket.emit('join room', 'general');
     }
 
-    // 部屋切り替え処理
     function switchRoom(targetRoom) {
       currentRoom = targetRoom;
       socket.emit('join room', currentRoom);
@@ -140,11 +138,9 @@
         messageHistory[currentRoom] = [];
       }
 
-      // 🌟 開いた部屋の未読カウントをリセット（0にして消す）
       unreadCounts[currentRoom] = 0;
       updateBadgeUI(currentRoom);
 
-      // ヘッダー表示の更新
       const header = document.getElementById('chat-header');
       if (targetRoom.includes("_DM_")) {
         const usersInDM = targetRoom.split("_DM_");
@@ -154,7 +150,6 @@
         header.textContent = `# ${targetRoom}`;
       }
 
-      // アクティブ表示の切り替え
       document.querySelectorAll('#sidebar li').forEach(li => li.classList.remove('active'));
       const activeEl = document.getElementById(`room-${targetRoom}`);
       if (activeEl) activeEl.classList.add('active');
@@ -162,14 +157,12 @@
       renderMessages();
     }
 
-    // DMを開始する部屋名を計算
     function startDM(targetUser) {
       if (targetUser === myUsername) return;
       const dmRoomName = [myUsername, targetUser].sort().join("_DM_");
       switchRoom(dmRoomName);
     }
 
-    // メッセージ送信
     function sendMessage(e) {
       e.preventDefault();
       const input = document.getElementById('input');
@@ -184,27 +177,50 @@
       input.value = '';
     }
 
-    // サーバーからメッセージを受信したとき
+    // 🌟 メッセージの編集処理
+    function editMessage(msgId, currentText) {
+      const newText = prompt("メッセージを編集:", currentText);
+      if (newText !== null && newText.trim() !== "" && newText !== currentText) {
+        socket.emit('edit message', {
+          id: msgId,
+          newText: newText.trim(),
+          targetRoom: currentRoom
+        });
+      }
+    }
+
+    // メッセージ受信
     socket.on('chat message', (data) => {
       const room = data.targetRoom;
 
-      // 履歴がなければ作成して保存（開いていなくても裏で保存される）
       if (!messageHistory[room]) {
         messageHistory[room] = [];
       }
       messageHistory[room].push(data);
 
       if (room === currentRoom) {
-        // 今見ている部屋なら画面を更新
         renderMessages();
       } else {
-        // 🌟 見ていない部屋なら未読カウントを＋1してバッジを更新！
         unreadCounts[room] = (unreadCounts[room] || 0) + 1;
         updateBadgeUI(room);
       }
     });
 
-    // バッジ（数字）の表示を更新する関数
+    // 🌟 編集メッセージの反映
+    socket.on('edit message', (data) => {
+      const room = data.targetRoom;
+      if (messageHistory[room]) {
+        const msg = messageHistory[room].find(m => m.id === data.id);
+        if (msg) {
+          msg.text = data.newText;
+          msg.isEdited = true; // 編集済みフラグ
+        }
+      }
+      if (room === currentRoom) {
+        renderMessages();
+      }
+    });
+
     function updateBadgeUI(room) {
       const badgeEl = document.getElementById(`badge-${room}`);
       if (!badgeEl) return;
@@ -212,13 +228,12 @@
       const count = unreadCounts[room] || 0;
       if (count > 0) {
         badgeEl.textContent = count;
-        badgeEl.style.display = 'inline-block'; // 表示
+        badgeEl.style.display = 'inline-block';
       } else {
-        badgeEl.style.display = 'none'; // 0件なら隠す
+        badgeEl.style.display = 'none';
       }
     }
 
-    // メッセージ描画
     function renderMessages() {
       const messagesContainer = document.getElementById('messages');
       messagesContainer.innerHTML = '';
@@ -230,8 +245,13 @@
         div.className = `message ${isMe ? 'my-msg' : ''}`;
         
         div.innerHTML = `
-          <div class="sender">${isMe ? 'あなた' : msg.user}</div>
+          <div class="sender">${isMe ? 'あなた' : escapeHtml(msg.user)}</div>
           <div class="text">${escapeHtml(msg.text)}</div>
+          <div class="msg-footer">
+            ${isMe ? `<button class="edit-btn" onclick="editMessage('${msg.id}', '${escapeHtml(msg.text)}')">編集</button>` : ''}
+            ${msg.isEdited ? '<span class="edited-mark">(編集済み)</span>' : ''}
+            <span class="msg-time">${msg.time || ''}</span>
+          </div>
         `;
         messagesContainer.appendChild(div);
       });
@@ -239,7 +259,6 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // オンラインユーザーリストの更新
     socket.on('update user list', (users) => {
       const userList = document.getElementById('user-list');
       userList.innerHTML = '';
@@ -252,11 +271,9 @@
         li.id = `room-${dmRoomName}`;
         li.onclick = () => startDM(username);
 
-        // 名前のテキスト部分
         const nameSpan = document.createElement('span');
         nameSpan.textContent = `👤 ${username}`;
 
-        // 未読バッジ部分
         const badgeSpan = document.createElement('span');
         badgeSpan.className = 'badge';
         badgeSpan.id = `badge-${dmRoomName}`;
@@ -275,9 +292,8 @@
       });
     });
 
-    // エスケープ処理
     function escapeHtml(str) {
-      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, "&#39;");
     }
   </script>
 </body>
