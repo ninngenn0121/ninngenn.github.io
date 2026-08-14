@@ -73,9 +73,9 @@
     </div>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
-    const socket = io();
+    const socket = io(window.location.origin);
     let myUsername = "";
     let currentRoom = "general"; // 現在開いているチャンネルまたはDM部屋
 
