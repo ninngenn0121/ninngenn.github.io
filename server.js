@@ -1,11 +1,11 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-const path = require('path');
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
@@ -20,32 +20,31 @@ io.on('connection', (socket) => {
   // ユーザー登録（ログイン時）
   socket.on('register user', (username) => {
     users[socket.id] = username;
-    // デフォルトで general チャンネルに参加
+
+    // デフォルトで基本のチャンネルに参加させておく
     socket.join('general');
-    
+    socket.join('random');
+
     // 全員にオンラインユーザーリストを更新して通知
     io.emit('update user list', users);
   });
 
-  // チャンネルまたはDMへの参加切り替え
+  // 部屋（チャンネルやDM）に参加する処理
   socket.on('join room', (roomName) => {
-    // 既存のすべての部屋から退出（自身の個別ID部屋以外）
-    Array.from(socket.rooms).forEach(room => {
-      if (room !== socket.id) socket.leave(room);
-    });
-
     socket.join(roomName);
-    console.log(`${users[socket.id]} が ${roomName} に参加しました`);
+    console.log(`${users[socket.id] || socket.id} が ${roomName} に参加しました`);
   });
 
   // メッセージ受信＆送信
   socket.on('chat message', (data) => {
-    // targetRoom (例: 'general' や 'DM_ユーザーA_ユーザーB') 内のユーザーだけに送信
-    io.to(data.targetRoom).emit('chat message', {
-      user: users[socket.id],
-      text: data.text,
-      targetRoom: data.targetRoom
-    });
+    // 送信先の部屋（data.targetRoom）にいる全員に送信
+    if (data.targetRoom) {
+      io.to(data.targetRoom).emit('chat message', {
+        user: users[socket.id] || '匿名',
+        text: data.text,
+        targetRoom: data.targetRoom
+      });
+    }
   });
 
   // 切断時
@@ -56,7 +55,8 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = 3000;
+// Renderの環境変数PORT対応（念のため設定）
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`サーバー起動中: http://localhost:${PORT}`);
+  console.log(`サーバー起動中: port ${PORT}`);
 });
