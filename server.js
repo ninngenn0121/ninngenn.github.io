@@ -56,8 +56,3 @@ io.on('connection', (socket) => {
     io.emit('update user list', users);
   });
 });
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`サーバー起動中: port ${PORT}`);
-});
