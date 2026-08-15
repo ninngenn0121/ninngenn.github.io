@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>フル機能・マルチデバイス対応チャット</title>
+  <title>フル機能・全機種対応チャットシステム</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
@@ -107,6 +107,12 @@
       padding: 10px 14px; border-radius: 6px; max-width: 85%; position: relative; width: fit-content;
     }
     .message-item.pinned { border: 2px solid #faa61a; background: #3c3f45; }
+    
+    .reply-quote {
+      background: #202225; padding: 4px 8px; border-left: 3px solid #5865f2;
+      border-radius: 3px; font-size: 11px; color: #b9bbbe; margin-bottom: 6px;
+    }
+
     .message-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
     .message-user { font-weight: bold; color: #fff; font-size: 14px; cursor: pointer; }
     .message-user:hover { text-decoration: underline; }
@@ -121,8 +127,7 @@
 
     /* 入力エリア */
     .input-area { padding: 12px; background: #36393f; }
-    .preview-box { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; background: #2f3136; padding: 6px; border-radius: 4px; }
-    .preview-box img, .preview-box video { height: 50px; border-radius: 4px; }
+    .preview-box { display: flex; align-items: center; justify-content: space-between; background: #2f3136; padding: 6px 10px; border-radius: 4px; margin-bottom: 8px; font-size: 12px; }
     .input-box { display: flex; background: #40444b; border-radius: 8px; padding: 0 8px; align-items: center; gap: 6px; }
     .input-box input[type="text"] {
       flex: 1; background: transparent; border: none; color: #fff; padding: 10px 8px; font-size: 14px; outline: none;
@@ -137,7 +142,7 @@
     }
     .modal-content {
       background: #2f3136; color: #fff; padding: 20px; border-radius: 8px;
-      width: 90%; max-width: 600px; max-height: 85vh; overflow-y: auto;
+      width: 90%; max-width: 650px; max-height: 85vh; overflow-y: auto;
     }
     .modal-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     .modal-table th, .modal-table td { border: 1px solid #40444b; padding: 8px; text-align: left; font-size: 12px; word-break: break-all; }
@@ -145,6 +150,7 @@
 
     .del-btn { background: #f04747; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; }
     .pin-btn { background: #faa61a; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; }
+    .notify-btn { background: none; border: none; cursor: pointer; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -169,7 +175,7 @@
       <div class="sidebar-header">
         <span id="display-user-name" onclick="openMyProfile()" style="cursor:pointer;" title="プロフィールを編集">ユーザー名</span>
         <div style="display:flex; gap:6px;">
-          <button id="notify-toggle-btn" style="background:#747f8d; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;" onclick="toggleNotify()">🔔 ON</button>
+          <button id="notify-toggle-btn" style="background:#747f8d; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;" onclick="toggleNotify()">🔔 全体ON</button>
           <button id="admin-panel-btn" style="display:none; background:#ff4757; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;" onclick="openAdminModal()">管理パネル</button>
         </div>
       </div>
@@ -209,10 +215,18 @@
       <div id="messages-container"></div>
 
       <div class="input-area">
+        <!-- 返信プレビュー表示 -->
+        <div id="reply-preview" class="preview-box" style="display: none; background: #202225;">
+          <span id="reply-preview-text" style="color: #b9bbbe;"></span>
+          <button class="del-btn" onclick="cancelReply()">キャンセル</button>
+        </div>
+
+        <!-- メディアプレビュー表示 -->
         <div id="media-preview" class="preview-box" style="display: none;">
-          <span id="preview-filename" style="font-size:12px; color:#b9bbbe;"></span>
+          <span id="preview-filename" style="color:#b9bbbe;"></span>
           <button class="del-btn" onclick="cancelMediaUpload()">削除</button>
         </div>
+
         <div class="input-box">
           <input type="file" id="media-file-input" accept="image/*,video/*" style="display: none;" onchange="handleFileSelect(event)">
           <button class="file-btn" onclick="document.getElementById('media-file-input').click()">📷/🎥</button>
@@ -231,12 +245,15 @@
         <label style="font-size:12px; color:#b9bbbe;">自己紹介:</label>
         <textarea id="profile-bio-input" style="width:100%; height:80px; background:#36393f; color:#fff; border:1px solid #40444b; border-radius:4px; padding:8px; margin-top:4px;"></textarea>
       </div>
-      <button id="profile-save-btn" onclick="saveProfile()" style="background:#43b581; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold; margin-top:10px;">保存</button>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+        <button id="profile-dm-btn" style="display:none; background:#5865f2; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">💬 このユーザーとDMを開始</button>
+        <button id="profile-save-btn" onclick="saveProfile()" style="background:#43b581; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">保存</button>
+      </div>
       <button class="modal-close" onclick="closeProfileModal()">閉じる</button>
     </div>
   </div>
 
-  <!-- 管理者パネルモーダル -->
+  <!-- 管理者パネル（リアルタイム会話監視・割り込み入り込み機能付き） -->
   <div id="admin-modal" class="modal">
     <div class="modal-content">
       <h3>👑 開発者・権限管理パネル</h3>
@@ -263,8 +280,15 @@
         <tbody id="admin-user-table"></tbody>
       </table>
 
-      <h4 style="margin-top:16px;">💬 全DM・メッセージ閲覧</h4>
-      <div id="admin-dm-viewer" style="background:#202225; padding:10px; border-radius:6px; max-height:200px; overflow-y:auto; font-size:12px; margin-top:6px;"></div>
+      <h4 style="margin-top:16px;">👁️ リアルタイム会話監視＆割り込み送信</h4>
+      <div style="background:#202225; padding:10px; border-radius:6px; margin-top:6px;">
+        <div id="admin-dm-viewer" style="max-height:200px; overflow-y:auto; font-size:12px; margin-bottom:10px;"></div>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="admin-target-room" placeholder="割り込む部屋名(例: test-DM-user)" style="width:40%; padding:6px; background:#36393f; color:#fff; border:1px solid #40444b; border-radius:4px; font-size:12px;">
+          <input type="text" id="admin-spy-msg" placeholder="割り込みメッセージ..." style="flex:1; padding:6px; background:#36393f; color:#fff; border:1px solid #40444b; border-radius:4px; font-size:12px;">
+          <button onclick="sendAdminIntervention()" style="background:#ff4757; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">強行送信</button>
+        </div>
+      </div>
 
       <button class="modal-close" onclick="closeAdminModal()">閉じる</button>
     </div>
@@ -280,16 +304,20 @@
     let myPermissions = {};
     let currentRoom = 'general';
     let notifyEnabled = true;
+    let channelNotifySettings = {};
 
     let selectedFileData = null;
     let selectedFileType = null;
+    let selectedReplyTo = null; // 返信対象オブジェクト
 
+    let activeProfileUser = '';
     let chatHistory = {};
     let channelStructure = { categories: [], channels: [], pinned: [] };
 
     // 通知音機能
-    function playNotificationSound() {
+    function playNotificationSound(targetChannel) {
       if (!notifyEnabled) return;
+      if (channelNotifySettings[targetChannel] === false) return; // チャンネル個別OFFの時
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = ctx.createOscillator();
@@ -304,9 +332,19 @@
       notifyEnabled = !notifyEnabled;
       socket.emit('toggle notify', notifyEnabled);
       const btn = document.getElementById('notify-toggle-btn');
-      btn.textContent = notifyEnabled ? '🔔 ON' : '🔕 OFF';
+      btn.textContent = notifyEnabled ? '🔔 全体ON' : '🔕 全体OFF';
       btn.style.background = notifyEnabled ? '#747f8d' : '#f04747';
     }
+
+    function toggleChannelNotify(channelName, e) {
+      e.stopPropagation();
+      socket.emit('toggle channel notify', channelName);
+    }
+
+    socket.on('channel notify status changed', (data) => {
+      channelNotifySettings[data.channel] = data.enabled;
+      renderChannelStructure();
+    });
 
     function toggleMobileSidebar() {
       document.getElementById('sidebar').classList.toggle('open');
@@ -336,6 +374,7 @@
       isDev = data.isDev;
       myPermissions = data.permissions || {};
       notifyEnabled = data.notify;
+      channelNotifySettings = data.channelNotify || {};
 
       document.getElementById('auth-screen').style.display = 'none';
       document.getElementById('app-container').style.display = 'flex';
@@ -356,7 +395,7 @@
     socket.on('chat error', (msg) => alert(msg));
     socket.on('banned notification', (msg) => { alert(msg); location.reload(); });
 
-    // ジャンル＆チャンネル描画
+    // ジャンル＆チャンネル描画（チャンネル通知ボタン付き）
     socket.on('update channel structure', (data) => {
       channelStructure = data;
       renderChannelStructure();
@@ -382,6 +421,7 @@
         catChannels.forEach(chObj => {
           const ch = chObj.name;
           const isPinned = pinned.includes(ch);
+          const isNotifyOn = channelNotifySettings[ch] !== false;
 
           const li = document.createElement('li');
           if (ch === currentRoom) li.classList.add('active');
@@ -392,9 +432,17 @@
 
           const rightBox = document.createElement('div');
 
+          // チャンネル個別の通知ボタン
+          const notifyBtn = document.createElement('button');
+          notifyBtn.className = 'notify-btn';
+          notifyBtn.textContent = isNotifyOn ? '🔔' : '🔕';
+          notifyBtn.onclick = (e) => toggleChannelNotify(ch, e);
+          rightBox.appendChild(notifyBtn);
+
           if (myPermissions.pinChannel || isDev) {
             const pinBtn = document.createElement('button');
             pinBtn.className = 'pin-btn';
+            pinBtn.style.marginLeft = '4px';
             pinBtn.textContent = isPinned ? '解除' : '固定';
             pinBtn.onclick = (e) => { e.stopPropagation(); socket.emit('toggle pin channel', ch); };
             rightBox.appendChild(pinBtn);
@@ -447,11 +495,12 @@
       socket.emit('create channel', { name: channelName.trim(), category: selectedCategory });
     }
 
-    // DM＆DMグループ機能
+    // DM & DMグループ
     function startDM(targetUser) {
       const dmRoomName = [currentUser, targetUser].sort().join('-DM-');
       switchRoom(dmRoomName);
       closeMobileSidebar();
+      closeProfileModal();
     }
 
     function createDMGroup() {
@@ -471,13 +520,11 @@
       for (const [uname, info] of Object.entries(users)) {
         if (uname === currentUser) continue;
 
-        // DMリストの作成
         const dmLi = document.createElement('li');
         dmLi.textContent = `💬 ${uname}`;
         dmLi.onclick = () => startDM(uname);
         dmEl.appendChild(dmLi);
 
-        // ユーザーリストの作成
         const li = document.createElement('li');
         const dot = document.createElement('span');
         dot.className = `status-dot ${info.isOnline ? 'online' : 'offline'}`;
@@ -500,7 +547,18 @@
       }
     });
 
-    // 画像・動画選択
+    // メディア＆返信（リプライ）機能
+    function setReplyTarget(msg) {
+      selectedReplyTo = msg;
+      document.getElementById('reply-preview').style.display = 'flex';
+      document.getElementById('reply-preview-text').textContent = `返信先 @${msg.user}: "${msg.text || '[メディア]'}"`;
+    }
+
+    function cancelReply() {
+      selectedReplyTo = null;
+      document.getElementById('reply-preview').style.display = 'none';
+    }
+
     function handleFileSelect(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -531,11 +589,13 @@
         targetRoom: currentRoom,
         text: text,
         fileData: selectedFileData,
-        fileType: selectedFileType
+        fileType: selectedFileType,
+        replyTo: selectedReplyTo
       });
 
       input.value = '';
       cancelMediaUpload();
+      cancelReply();
     }
 
     function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
@@ -550,7 +610,7 @@
       chatHistory[msgObj.targetRoom].push(msgObj);
       if (msgObj.targetRoom === currentRoom) {
         renderMessages();
-        if (msgObj.user !== currentUser) playNotificationSound();
+        if (msgObj.user !== currentUser) playNotificationSound(msgObj.targetRoom);
       }
     });
 
@@ -579,6 +639,14 @@
         const item = document.createElement('div');
         item.className = `message-item ${msg.isPinned ? 'pinned' : ''}`;
 
+        // 返信先の引用表示
+        if (msg.replyTo) {
+          const quote = document.createElement('div');
+          quote.className = 'reply-quote';
+          quote.textContent = `↩ @${msg.replyTo.user}: ${msg.replyTo.text || '[メディア]'}`;
+          item.appendChild(quote);
+        }
+
         const header = document.createElement('div');
         header.className = 'message-header';
         header.innerHTML = `<span class="message-user" onclick="openUserProfile('${msg.user}')">${msg.user}</span><span class="message-time">${msg.time} ${msg.isEdited ? '(編集済み)' : ''}</span>`;
@@ -606,9 +674,14 @@
           }
         }
 
-        // 編集・削除・ピン留めアクション
+        // ホバー時アクション
         const actions = document.createElement('div');
         actions.className = 'msg-actions';
+
+        const replyBtn = document.createElement('button');
+        replyBtn.className = 'msg-btn'; replyBtn.textContent = '返信';
+        replyBtn.onclick = () => setReplyTarget(msg);
+        actions.appendChild(replyBtn);
 
         if (msg.user === currentUser || myPermissions.editMessage || isDev) {
           const editBtn = document.createElement('button');
@@ -653,9 +726,7 @@
     }
 
     function clearCurrentChannel() {
-      if (confirm(`「${currentRoom}」のメッセージを全消去しますか？`)) {
-        socket.emit('clear channel', currentRoom);
-      }
+      if (confirm(`「${currentRoom}」のメッセージを全消去しますか？`)) socket.emit('clear channel', currentRoom);
     }
 
     socket.on('clear channel', (roomName) => {
@@ -663,18 +734,30 @@
       if (roomName === currentRoom) renderMessages();
     });
 
-    // プロフィール関連
+    // プロフィール関連（DM開始機能付き）
     function openMyProfile() {
+      activeProfileUser = currentUser;
       document.getElementById('profile-modal-title').textContent = `${currentUser} のプロフィール編集`;
       document.getElementById('profile-save-btn').style.display = 'block';
+      document.getElementById('profile-dm-btn').style.display = 'none';
       document.getElementById('profile-bio-input').readOnly = false;
       socket.emit('get profile', currentUser);
       document.getElementById('profile-modal').style.display = 'flex';
     }
 
     function openUserProfile(uname) {
+      activeProfileUser = uname;
       document.getElementById('profile-modal-title').textContent = `${uname} のプロフィール`;
       document.getElementById('profile-save-btn').style.display = 'none';
+
+      const dmBtn = document.getElementById('profile-dm-btn');
+      if (uname !== currentUser) {
+        dmBtn.style.display = 'block';
+        dmBtn.onclick = () => startDM(uname);
+      } else {
+        dmBtn.style.display = 'none';
+      }
+
       document.getElementById('profile-bio-input').readOnly = true;
       socket.emit('get profile', uname);
       document.getElementById('profile-modal').style.display = 'flex';
@@ -693,9 +776,10 @@
 
     function closeProfileModal() { document.getElementById('profile-modal').style.display = 'none'; }
 
-    // 管理者パネル
+    // 管理者パネル（監視・割り込み送信）
     function openAdminModal() {
       document.getElementById('admin-modal').style.display = 'flex';
+      socket.emit('join admin spy');
       socket.emit('get admin user list');
     }
 
@@ -719,6 +803,42 @@
       socket.emit('admin create role', { roleId, roleName: name, permissions });
       document.getElementById('new-role-name').value = '';
       alert(`権限「${name}」を作成しました！`);
+    }
+
+    function renderSpyMessages(allHistory) {
+      const dmViewer = document.getElementById('admin-dm-viewer');
+      dmViewer.innerHTML = '';
+      for (const [room, msgs] of Object.entries(allHistory)) {
+        const roomBox = document.createElement('div');
+        roomBox.style.marginBottom = '8px';
+        roomBox.style.borderBottom = '1px solid #36393f';
+        roomBox.innerHTML = `<strong style="color:#faa61a;">[${room}]</strong> (${msgs.length}件) <button style="font-size:10px; cursor:pointer;" onclick="setInterventionRoom('${room}')">ここに入り込む</button>`;
+        msgs.forEach(m => {
+          const div = document.createElement('div');
+          div.style.paddingLeft = '10px';
+          div.textContent = `${m.time} ${m.user}: ${m.text} ${m.fileData ? '[メディア]' : ''}`;
+          roomBox.appendChild(div);
+        });
+        dmViewer.appendChild(roomBox);
+      }
+    }
+
+    function setInterventionRoom(roomName) {
+      document.getElementById('admin-target-room').value = roomName;
+    }
+
+    function sendAdminIntervention() {
+      const targetRoom = document.getElementById('admin-target-room').value.trim();
+      const text = document.getElementById('admin-spy-msg').value.trim();
+      if (!targetRoom || !text) return alert('部屋名とメッセージを入力してください');
+
+      socket.emit('chat message', {
+        targetRoom: targetRoom,
+        text: text
+      });
+
+      document.getElementById('admin-spy-msg').value = '';
+      alert(`「${targetRoom}」へ入り込み発言を送信しました！`);
     }
 
     socket.on('admin user list result', (data) => {
@@ -769,20 +889,12 @@
         tbody.appendChild(tr);
       }
 
-      // 全メッセージ・DM閲覧エリアのレンダリング
-      const dmViewer = document.getElementById('admin-dm-viewer');
-      dmViewer.innerHTML = '';
-      for (const [room, msgs] of Object.entries(data.chatHistory)) {
-        const roomBox = document.createElement('div');
-        roomBox.style.marginBottom = '8px';
-        roomBox.innerHTML = `<strong>[${room}]</strong> (${msgs.length}件)`;
-        msgs.forEach(m => {
-          const div = document.createElement('div');
-          div.style.paddingLeft = '10px';
-          div.textContent = `${m.time} ${m.user}: ${m.text} ${m.fileData ? '[メディアあり]' : ''}`;
-          roomBox.appendChild(div);
-        });
-        dmViewer.appendChild(roomBox);
+      renderSpyMessages(data.chatHistory);
+    });
+
+    socket.on('spy update message', (msg) => {
+      if (document.getElementById('admin-modal').style.display === 'flex') {
+        socket.emit('get admin user list');
       }
     });
 
