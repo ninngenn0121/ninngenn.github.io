@@ -38,7 +38,7 @@
       padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center; display: inline-block;
     }
 
-    .admin-btn { background: #d9480f; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .admin-btn { background: #d9480f; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-bottom: 6px; width: 100%; text-align: left; }
     .admin-btn:hover { background: #c2255c; }
 
     #chat-header { padding: 15px; border-bottom: 1px solid #e3e5e8; font-weight: bold; font-size: 17px; display: flex; justify-content: space-between; align-items: center; }
@@ -67,8 +67,13 @@
     #input { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 20px; outline: none; font-size: 16px; }
     #form button { padding: 10px 20px; background: #0084ff; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 16px; }
 
-    #pass-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 200; }
-    .pass-box { background: white; padding: 20px; border-radius: 8px; max-width: 400px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    /* モーダル用共通スタイル */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 200; }
+    .modal-box { background: white; padding: 20px; border-radius: 8px; max-width: 480px; width: 90%; max-height: 80vh; overflow-y: auto; color: #333; }
+    .modal-box h3 { color: #111; font-size: 16px; margin-bottom: 12px; }
+    .list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; font-size: 14px; }
+    .btn-danger { background: #e03131; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .btn-success { background: #2f9e44; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -84,12 +89,30 @@
     </div>
   </div>
 
-  <!-- アカウント情報一覧ダイアログ (開発者用) -->
-  <div id="pass-modal">
-    <div class="pass-box">
+  <!-- パスワード一覧モーダル -->
+  <div id="pass-modal" class="modal-overlay">
+    <div class="modal-box">
       <h3>🔑 ユーザー・パスワード一覧</h3>
-      <div id="pass-list" style="margin: 15px 0; text-align: left; font-size: 14px;"></div>
-      <button onclick="document.getElementById('pass-modal').style.display='none'" style="padding: 6px 12px; cursor: pointer;">閉じる</button>
+      <div id="pass-list"></div>
+      <button onclick="closeModal('pass-modal')" style="margin-top: 15px; padding: 6px 12px; cursor: pointer;">閉じる</button>
+    </div>
+  </div>
+
+  <!-- DM監視一覧モーダル -->
+  <div id="dm-modal" class="modal-overlay">
+    <div class="modal-box">
+      <h3>🔍 全DM（ダイレクトメッセージ）一覧</h3>
+      <div id="dm-list"></div>
+      <button onclick="closeModal('dm-modal')" style="margin-top: 15px; padding: 6px 12px; cursor: pointer;">閉じる</button>
+    </div>
+  </div>
+
+  <!-- BAN管理モーダル -->
+  <div id="ban-modal" class="modal-overlay">
+    <div class="modal-box">
+      <h3>🚫 ユーザーBAN（アカウント停止）管理</h3>
+      <div id="ban-list"></div>
+      <button onclick="closeModal('ban-modal')" style="margin-top: 15px; padding: 6px 12px; cursor: pointer;">閉じる</button>
     </div>
   </div>
 
@@ -122,10 +145,9 @@
     <!-- 開発者専用エリア -->
     <div id="admin-panel" style="display: none; border-top: 1px solid #4f545c; padding-top: 10px;">
       <h3 style="color: #ff8787;">🛡️ 開発者メニュー</h3>
-      <button class="admin-btn" style="width: 100%; margin-bottom: 8px;" onclick="fetchUserPasswords()">🔑 パスワード一覧表示</button>
-      <div style="font-size: 11px; color: #b9bbbe; line-height: 1.4;">
-        ※ 開発者は全投稿の編集/削除および全DMの閲覧が可能です。
-      </div>
+      <button class="admin-btn" onclick="fetchUserPasswords()">🔑 パスワード一覧表示</button>
+      <button class="admin-btn" onclick="fetchDMList()">🔍 DMの閲覧・監視</button>
+      <button class="admin-btn" onclick="openBanManager()">🚫 BAN（ユーザー停止）管理</button>
     </div>
   </div>
 
@@ -133,7 +155,7 @@
   <div id="main-chat">
     <div id="chat-header">
       <span id="chat-title"># general</span>
-      <button id="clear-channel-btn" class="admin-btn" style="display: none;" onclick="clearCurrentChannel()">⚠️ チャンネル投稿全削除</button>
+      <button id="clear-channel-btn" class="admin-btn" style="display: none; width: auto; background: #e03131;" onclick="clearCurrentChannel()">⚠️ チャンネル投稿全削除</button>
     </div>
     <div id="messages"></div>
     <form id="form" onsubmit="sendMessage(event)">
@@ -154,6 +176,8 @@
     let messageHistory = {};
     const unreadCounts = {};
     let latestUserList = {};
+    let cachedUsersObj = {};
+    let cachedBannedList = [];
 
     function toggleAuthMode() {
       isRegisterMode = !isRegisterMode;
@@ -175,6 +199,11 @@
     }
 
     socket.on('auth error', (msg) => { alert(msg); });
+
+    socket.on('banned notification', (msg) => {
+      alert(msg);
+      window.location.reload();
+    });
 
     socket.on('auth success', (data) => {
       myUsername = data.username;
@@ -209,8 +238,7 @@
       const headerTitle = document.getElementById('chat-title');
       if (targetRoom.includes("_DM_")) {
         const usersInDM = targetRoom.split("_DM_");
-        const otherUser = usersInDM.find(u => u !== myUsername) || usersInDM[0];
-        headerTitle.textContent = `💬 ${otherUser} とのDM`;
+        headerTitle.textContent = `💬 DM: ${usersInDM.join(" ↔ ")}`;
       } else {
         headerTitle.textContent = `# ${targetRoom}`;
       }
@@ -225,10 +253,6 @@
     function startDM(targetUser) {
       if (targetUser === myUsername) return;
       const dmRoomName = [myUsername, targetUser].sort().join("_DM_");
-      
-      if (isAdminUser) {
-        socket.emit('admin join room', dmRoomName);
-      }
       switchRoom(dmRoomName);
     }
 
@@ -265,17 +289,109 @@
       }
     }
 
+    function closeModal(modalId) {
+      document.getElementById(modalId).style.display = 'none';
+    }
+
+    /* パスワード一覧 */
     function fetchUserPasswords() {
       socket.emit('get admin user list');
     }
 
-    socket.on('admin user list result', (usersObj) => {
+    socket.on('admin user list result', (data) => {
+      cachedUsersObj = data.users;
+      cachedBannedList = data.banned;
+      
       const listDiv = document.getElementById('pass-list');
       listDiv.innerHTML = '';
-      for (const [u, p] of Object.entries(usersObj)) {
-        listDiv.innerHTML += `<div><strong>ユーザー:</strong> ${escapeHtml(u)} / <strong>Pass:</strong> ${escapeHtml(p)}</div>`;
+      for (const [u, p] of Object.entries(cachedUsersObj)) {
+        const isBanned = cachedBannedList.includes(u);
+        listDiv.innerHTML += `
+          <div class="list-item">
+            <div><strong>${escapeHtml(u)}</strong> ${isBanned ? '<span style="color:red;">(BAN済み)</span>' : ''}</div>
+            <div style="font-family: monospace; background:#f1f3f5; padding:2px 6px; border-radius:3px;">${escapeHtml(p)}</div>
+          </div>`;
       }
       document.getElementById('pass-modal').style.display = 'flex';
+    });
+
+    /* DM閲覧・監視 */
+    function fetchDMList() {
+      socket.emit('get admin dm list');
+    }
+
+    socket.on('admin dm list result', (dmRooms) => {
+      const listDiv = document.getElementById('dm-list');
+      listDiv.innerHTML = '';
+      if (dmRooms.length === 0) {
+        listDiv.innerHTML = '<div style="padding: 10px; color: #888;">現在進行中のDMはありません。</div>';
+      } else {
+        dmRooms.forEach(room => {
+          listDiv.innerHTML += `
+            <div class="list-item">
+              <div>
+                <strong>💬 ${escapeHtml(room.members.join(' ↔ '))}</strong>
+                <div style="font-size: 11px; color: #666;">送信件数: ${room.msgCount}件</div>
+              </div>
+              <button class="btn-success" onclick="observeDM('${room.roomName}')">監視・開く</button>
+            </div>`;
+        });
+      }
+      document.getElementById('dm-modal').style.display = 'flex';
+    });
+
+    function observeDM(roomName) {
+      closeModal('dm-modal');
+      socket.emit('admin observe dm', roomName);
+      switchRoom(roomName);
+    }
+
+    /* BAN管理 */
+    function openBanManager() {
+      socket.emit('get admin user list'); // 最新情報を取得
+      setTimeout(() => {
+        renderBanManagerUI();
+        document.getElementById('ban-modal').style.display = 'flex';
+      }, 200);
+    }
+
+    function renderBanManagerUI() {
+      const listDiv = document.getElementById('ban-list');
+      listDiv.innerHTML = '';
+
+      for (const u of Object.keys(cachedUsersObj)) {
+        if (u === 'アルパカ') continue; // 自分は表示しない
+        const isBanned = cachedBannedList.includes(u);
+        listDiv.innerHTML += `
+          <div class="list-item">
+            <div>
+              <strong>${escapeHtml(u)}</strong>
+              ${isBanned ? '<span style="color:red; font-size:12px; margin-left:8px;">[停止中]</span>' : ''}
+            </div>
+            ${isBanned ? `
+              <button class="btn-success" onclick="unbanUser('${escapeHtml(u)}')">BAN解除</button>
+            ` : `
+              <button class="btn-danger" onclick="banUser('${escapeHtml(u)}')">BAN（アカウント停止）</button>
+            `}
+          </div>`;
+      }
+    }
+
+    function banUser(targetUser) {
+      if (confirm(`本当に [${targetUser}] をBANしますか？\n（オンラインの場合は即座に切断されます）`)) {
+        socket.emit('admin ban user', targetUser);
+      }
+    }
+
+    function unbanUser(targetUser) {
+      if (confirm(`[${targetUser}] のBANを解除しますか？`)) {
+        socket.emit('admin unban user', targetUser);
+      }
+    }
+
+    socket.on('admin ban success', (data) => {
+      alert(`ユーザー [${data.username}] を${data.isBanned ? 'BAN' : 'BAN解除'}しました。`);
+      closeModal('ban-modal');
     });
 
     socket.on('chat message', (data) => {
@@ -358,7 +474,6 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // オフライン経過時間の計算関数（分単位・時間単位）
     function formatLastSeen(lastSeenTimestamp) {
       if (!lastSeenTimestamp) return 'オフライン';
       const now = Date.now();
@@ -380,7 +495,6 @@
       }
     }
 
-    // ユーザーリスト更新
     socket.on('update user list', (users) => {
       latestUserList = users;
       renderUserLists();
@@ -394,7 +508,7 @@
       offlineList.innerHTML = '';
 
       for (const [username, info] of Object.entries(latestUserList)) {
-        if (username === myUsername) continue; // 自分自身はリストに表示しない
+        if (username === myUsername) continue;
 
         const dmRoomName = [myUsername, username].sort().join("_DM_");
         const li = document.createElement('li');
@@ -439,7 +553,6 @@
       }
     }
 
-    // 1分ごとにオフライン表示（「◯分前」）を自動更新
     setInterval(() => {
       if (Object.keys(latestUserList).length > 0) {
         renderUserLists();
