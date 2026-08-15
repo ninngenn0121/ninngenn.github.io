@@ -44,6 +44,11 @@
       padding: 16px; background: #202225; font-weight: bold; color: #fff;
       display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;
     }
+    .profile-btn {
+      background: #4f545c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;
+    }
+    .profile-btn:hover { background: #686d73; }
+    
     .section-title {
       padding: 12px 16px 4px; font-size: 11px; font-weight: bold; color: #8e9297;
       text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; margin-top: 8px;
@@ -80,14 +85,14 @@
       padding: 10px 14px; border-radius: 6px; max-width: 80%; position: relative;
     }
     
-    /* 返信表示スタイル */
     .reply-quote {
       background: #202225; border-left: 3px solid #5865f2;
       padding: 4px 8px; font-size: 12px; border-radius: 2px; margin-bottom: 6px; color: #b9bbbe;
     }
 
     .message-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-    .message-user { font-weight: bold; color: #fff; font-size: 14px; }
+    .message-user { font-weight: bold; color: #fff; font-size: 14px; cursor: pointer; }
+    .message-user:hover { text-decoration: underline; }
     .message-time { font-size: 11px; color: #72767d; }
     .message-text { font-size: 14px; word-break: break-all; color: #dcddde; }
     .edited-tag { font-size: 10px; color: #72767d; margin-left: 4px; }
@@ -99,7 +104,6 @@
     }
     .msg-btn:hover { color: #fff; background: #4f545c; }
 
-    /* 返信プレビューバー */
     #reply-bar {
       display: none; background: #2f3136; padding: 6px 12px;
       border-left: 4px solid #5865f2; font-size: 12px;
@@ -125,19 +129,39 @@
     }
     .modal-content {
       background: #2f3136; color: #fff; padding: 20px; border-radius: 8px;
-      width: 550px; max-width: 90%; max-height: 80vh; overflow-y: auto;
+      width: 480px; max-width: 90%; max-height: 80vh; overflow-y: auto;
     }
     .modal-content h3 { margin-bottom: 12px; border-bottom: 1px solid #40444b; padding-bottom: 8px; }
     .modal-content h4 { margin: 12px 0 6px; font-size: 14px; color: #b9bbbe; }
     .modal-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
     .modal-table th, .modal-table td { border: 1px solid #40444b; padding: 8px; text-align: left; font-size: 13px; }
-    .modal-close { background: #747f8d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; float: right; }
+    .modal-close { background: #747f8d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
 
     .del-btn { background: #f04747; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; }
     .del-btn:hover { background: #d83c3c; }
 
     .user-select-list { max-height: 200px; overflow-y: auto; margin: 12px 0; background: #36393f; padding: 10px; border-radius: 4px; }
     .user-select-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; }
+
+    /* プロフィールカードスタイル */
+    .profile-card-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+    }
+    .profile-avatar {
+      width: 50px; height: 50px; border-radius: 50%; background: #5865f2;
+      display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; color: white;
+    }
+    .profile-bio-box {
+      background: #202225; border-radius: 6px; padding: 12px; margin: 12px 0; font-size: 13px; min-height: 60px; white-space: pre-wrap; word-break: break-all;
+    }
+    .profile-bio-textarea {
+      width: 100%; height: 80px; background: #202225; border: 1px solid #40444b; color: white;
+      padding: 8px; border-radius: 4px; font-size: 13px; resize: vertical; outline: none; margin-bottom: 12px;
+    }
+    .action-btn-primary {
+      background: #5865f2; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;
+    }
+    .action-btn-primary:hover { background: #4752c4; }
   </style>
 </head>
 <body>
@@ -155,7 +179,10 @@
   <div id="app-container" style="display: none;">
     <div id="sidebar">
       <div class="sidebar-header">
-        <span id="display-user-name">ユーザー名</span>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span id="display-user-name">ユーザー名</span>
+          <button class="profile-btn" onclick="openProfileModal(currentUser)">設定</button>
+        </div>
         <button id="admin-panel-btn" style="display:none; background:#ff4757; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:12px;" onclick="openAdminModal()">管理画面</button>
       </div>
 
@@ -204,6 +231,32 @@
     </div>
   </div>
 
+  <!-- プロフィール表示 / 編集モーダル -->
+  <div id="profile-modal" class="modal">
+    <div class="modal-content">
+      <div class="profile-card-header">
+        <div class="profile-avatar" id="prof-avatar-text">U</div>
+        <div>
+          <h3 id="prof-username" style="border:none; margin:0; padding:0;">ユーザー名</h3>
+          <span id="prof-status-badge" style="font-size: 11px; color: #b9bbbe;">ステータス</span>
+        </div>
+      </div>
+
+      <h4>自己紹介</h4>
+      <!--閲覧用-->
+      <div id="prof-bio-view" class="profile-bio-box">自己紹介が設定されていません。</div>
+      <!--編集用-->
+      <textarea id="prof-bio-edit" class="profile-bio-textarea" style="display: none;" placeholder="自己紹介を入力してください..."></textarea>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;">
+        <button id="prof-dm-btn" class="action-btn-primary" style="display: none;" onclick="startDmFromProfile()">DMを作成・送信</button>
+        <button id="prof-edit-btn" class="action-btn-primary" style="display: none;" onclick="toggleBioEdit(true)">プロフィールを編集</button>
+        <button id="prof-save-btn" class="action-btn-primary" style="display: none; background:#43b581;" onclick="saveBio()">保存</button>
+        <button class="modal-close" onclick="closeProfileModal()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
   <!-- グループDM作成モーダル -->
   <div id="group-dm-modal" class="modal">
     <div class="modal-content">
@@ -212,7 +265,7 @@
       <div id="group-user-select-list" class="user-select-list"></div>
       <div style="display: flex; justify-content: flex-end; gap: 8px;">
         <button class="modal-close" style="float:none;" onclick="closeGroupDmModal()">キャンセル</button>
-        <button style="background: #5865f2; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;" onclick="createGroupDm()">作成する</button>
+        <button class="action-btn-primary" onclick="createGroupDm()">作成する</button>
       </div>
     </div>
   </div>
@@ -247,7 +300,7 @@
         <tbody id="admin-dm-table"></tbody>
       </table>
 
-      <button class="modal-close" onclick="closeAdminModal()">閉じる</button>
+      <button class="modal-close" style="float: right;" onclick="closeAdminModal()">閉じる</button>
     </div>
   </div>
 
@@ -263,9 +316,10 @@
     let chatHistory = {};
     let unreadCounts = {};
     let onlineUserList = {};
+    let selectedProfileUser = null;
 
     let notificationsEnabled = false;
-    let replyingToMsg = null; // 現在返信中のメッセージ情報
+    let replyingToMsg = null;
 
     function toggleNotifications() {
       if (!notificationsEnabled) {
@@ -514,7 +568,8 @@
           li.appendChild(badge);
         }
 
-        li.onclick = () => switchRoom(dmRoom);
+        // タップ/クリックでプロフィールモーダルを表示
+        li.onclick = () => openProfileModal(uname);
 
         if (info.isOnline) onlineListEl.appendChild(li);
         else offlineListEl.appendChild(li);
@@ -523,6 +578,77 @@
 
     function getDmRoomName(userA, userB) {
       return [userA, userB].sort().join('_DM_');
+    }
+
+    /* --- プロフィール機能 --- */
+    function openProfileModal(username) {
+      selectedProfileUser = username;
+      document.getElementById('prof-avatar-text').textContent = username.charAt(0).toUpperCase();
+      document.getElementById('prof-username').textContent = username;
+
+      const isMe = (username === currentUser);
+      const isOnline = onlineUserList[username]?.isOnline;
+
+      document.getElementById('prof-status-badge').textContent = isMe ? '自分' : (isOnline ? 'オンライン' : 'オフライン');
+
+      document.getElementById('prof-dm-btn').style.display = isMe ? 'none' : 'block';
+      document.getElementById('prof-edit-btn').style.display = isMe ? 'block' : 'none';
+      document.getElementById('prof-save-btn').style.display = 'none';
+
+      toggleBioEdit(false);
+
+      // プロフィールデータ取得
+      socket.emit('get user profile', username);
+      document.getElementById('profile-modal').style.display = 'flex';
+    }
+
+    function closeProfileModal() {
+      document.getElementById('profile-modal').style.display = 'none';
+    }
+
+    function toggleBioEdit(isEditing) {
+      const viewEl = document.getElementById('prof-bio-view');
+      const editEl = document.getElementById('prof-bio-edit');
+      const editBtn = document.getElementById('prof-edit-btn');
+      const saveBtn = document.getElementById('prof-save-btn');
+
+      if (isEditing) {
+        editEl.value = viewEl.textContent === '自己紹介が設定されていません。' ? '' : viewEl.textContent;
+        viewEl.style.display = 'none';
+        editEl.style.display = 'block';
+        editBtn.style.display = 'none';
+        saveBtn.style.display = 'block';
+      } else {
+        viewEl.style.display = 'block';
+        editEl.style.display = 'none';
+        if (selectedProfileUser === currentUser) {
+          editBtn.style.display = 'block';
+        }
+        saveBtn.style.display = 'none';
+      }
+    }
+
+    function saveBio() {
+      const bioText = document.getElementById('prof-bio-edit').value.trim();
+      socket.emit('update profile bio', bioText);
+    }
+
+    socket.on('user profile result', (profile) => {
+      const viewEl = document.getElementById('prof-bio-view');
+      viewEl.textContent = profile.bio || '自己紹介が設定されていません。';
+    });
+
+    socket.on('profile bio updated', (bioText) => {
+      document.getElementById('prof-bio-view').textContent = bioText || '自己紹介が設定されていません。';
+      toggleBioEdit(false);
+    });
+
+    function startDmFromProfile() {
+      if (selectedProfileUser && selectedProfileUser !== currentUser) {
+        const dmRoom = getDmRoomName(currentUser, selectedProfileUser);
+        closeProfileModal();
+        switchRoom(dmRoom);
+      }
     }
 
     socket.on('load history', (history) => {
@@ -616,7 +742,6 @@
       }
     });
 
-    /* --- 返信機能 --- */
     function startReply(msgObj) {
       replyingToMsg = msgObj;
       document.getElementById('reply-text-preview').textContent = `返信先 @${msgObj.user}: ${msgObj.text}`;
@@ -671,7 +796,6 @@
         const item = document.createElement('div');
         item.className = 'message-item';
 
-        // 引用返信の表示
         if (msg.replyTo) {
           const replyQuote = document.createElement('div');
           replyQuote.className = 'reply-quote';
@@ -685,6 +809,7 @@
         const userSpan = document.createElement('span');
         userSpan.className = 'message-user';
         userSpan.textContent = msg.user;
+        userSpan.onclick = () => openProfileModal(msg.user); // 投稿者名をタップでプロフィール表示
 
         const timeSpan = document.createElement('span');
         timeSpan.className = 'message-time';
@@ -707,18 +832,15 @@
         item.appendChild(header);
         item.appendChild(textDiv);
 
-        // アクションボタン
         const actions = document.createElement('div');
         actions.className = 'msg-actions';
 
-        // 誰でも使える「返信」ボタン
         const replyBtn = document.createElement('button');
         replyBtn.className = 'msg-btn';
         replyBtn.textContent = '返信';
         replyBtn.onclick = () => startReply(msg);
         actions.appendChild(replyBtn);
 
-        // 「自分の投稿」または「開発者（アルパカ）」のみ編集・削除ボタンを表示
         if (msg.user === currentUser || currentUserIsAdmin) {
           const editBtn = document.createElement('button');
           editBtn.className = 'msg-btn';
@@ -784,7 +906,6 @@
       if (roomName === currentRoom) renderMessages();
     });
 
-    /* --- 管理者機能 --- */
     function openAdminModal() {
       document.getElementById('admin-modal').style.display = 'flex';
       socket.emit('get admin user list');
@@ -795,7 +916,6 @@
       document.getElementById('admin-modal').style.display = 'none';
     }
 
-    // パスワード表示を含むユーザー管理表
     socket.on('admin user list result', (data) => {
       const tbody = document.getElementById('admin-user-table');
       tbody.innerHTML = '';
@@ -806,7 +926,6 @@
         const tdName = document.createElement('td');
         tdName.textContent = uname;
 
-        // 開発者用パスワード閲覧列
         const tdPass = document.createElement('td');
         tdPass.textContent = pass;
         tdPass.style.fontFamily = 'monospace';
