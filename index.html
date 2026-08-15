@@ -2,97 +2,107 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>チャットアプリ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>マルチデバイス対応チャット</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Helvetica Neue', Arial, sans-serif;
-      background-color: #f0f2f5; height: 100vh;
-      display: flex; justify-content: center; align-items: center;
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f0f2f5;
     }
 
     #auth-screen {
-      background: white; padding: 30px; border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 90%; max-width: 360px; text-align: center;
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: #2f3136; display: flex; justify-content: center; align-items: center; z-index: 9999;
     }
-    #auth-screen h2 { margin-bottom: 20px; color: #333; }
-    #auth-screen input {
+    .auth-box {
+      background: white; padding: 30px; border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3); width: 90%; max-width: 360px; text-align: center;
+    }
+    .auth-box h2 { margin-bottom: 20px; color: #333; }
+    .auth-box input {
       width: 100%; padding: 10px; margin-bottom: 12px;
       border: 1px solid #ccc; border-radius: 4px; font-size: 14px;
     }
-    #auth-screen button {
-      width: 100%; padding: 10px; background-color: #007bff; color: white;
-      border: none; border-radius: 4px; font-size: 16px; cursor: pointer; margin-bottom: 8px;
+    .auth-box button {
+      width: 100%; padding: 10px; background-color: #5865f2; color: white;
+      border: none; border-radius: 4px; font-size: 16px; cursor: pointer; font-weight: bold; margin-bottom: 8px;
     }
-    #auth-screen button:hover { background-color: #0056b3; }
-    .toggle-auth { color: #007bff; cursor: pointer; font-size: 12px; text-decoration: underline; }
+    .toggle-auth { color: #5865f2; cursor: pointer; font-size: 12px; text-decoration: underline; }
 
+    /* アプリ全体レイアウト */
     #app-container {
-      display: flex; width: 100vw; height: 100vh; background: white;
-      overflow: hidden; position: relative;
+      display: flex; width: 100vw; height: 100vh; background: #36393f;
+      position: relative; overflow: hidden;
     }
 
-    /* サイドバーとレスポンシブメニュー対応 */
+    /* サイドバー (全端末対応) */
     #sidebar {
-      width: 280px; background-color: #2f3136; color: #dcddde;
-      display: flex; flex-direction: column; border-right: 1px solid #202225; overflow-y: auto;
-      z-index: 100; transition: transform 0.3s ease;
+      width: 280px; min-width: 280px; background-color: #2f3136; color: #dcddde;
+      display: flex; flex-direction: column; border-right: 1px solid #202225;
+      z-index: 200; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      height: 100%; overflow-y: auto;
     }
 
-    /* スマホ画面レイアウト (幅768px以下) */
+    /* スマホ・タブレット縦画面 (768px以下) */
     @media (max-width: 768px) {
       #sidebar {
         position: absolute; top: 0; left: 0; height: 100%;
         transform: translateX(-100%); width: 80%; max-width: 300px;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+        box-shadow: 4px 0 15px rgba(0,0,0,0.5);
       }
       #sidebar.open { transform: translateX(0); }
-      .mobile-menu-btn { display: inline-block !important; }
-      #sidebar-overlay { display: none; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 90; }
-      #sidebar-overlay.active { display: block; }
+      .mobile-menu-btn { display: inline-flex !important; }
     }
 
+    #sidebar-overlay {
+      display: none; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.6); z-index: 150; backdrop-filter: blur(2px);
+    }
+    #sidebar-overlay.active { display: block; }
+
     .mobile-menu-btn {
-      display: none; background: none; border: none; color: white; font-size: 20px; cursor: pointer; margin-right: 10px;
+      display: none; background: none; border: none; color: white;
+      font-size: 22px; cursor: pointer; margin-right: 12px; align-items: center;
     }
 
     .sidebar-header {
       padding: 16px; background: #202225; font-weight: bold; color: #fff;
       display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;
     }
-    .profile-btn {
-      background: #4f545c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;
-    }
     
-    .section-title {
+    .section-header {
       padding: 12px 16px 4px; font-size: 11px; font-weight: bold; color: #8e9297;
       text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; margin-top: 8px;
     }
+    .genre-title {
+      padding: 8px 12px 4px 16px; font-size: 12px; font-weight: bold; color: #b9bbbe;
+      display: flex; justify-content: space-between; align-items: center; background: #292b2f; margin-top: 4px;
+    }
+
     .add-btn { background: none; border: none; color: #8e9297; cursor: pointer; font-size: 16px; }
+    .add-btn:hover { color: #fff; }
+
     .item-list { list-style: none; padding: 0 8px; }
     .item-list li {
       padding: 8px 12px; border-radius: 4px; cursor: pointer; margin-bottom: 2px;
       display: flex; justify-content: space-between; align-items: center; font-size: 13px;
     }
     .item-list li:hover { background-color: #393c43; color: #fff; }
-    .item-list li.active { background-color: #42464d; color: #fff; }
-    .user-info-text { display: flex; flex-direction: column; }
-    .offline-time { font-size: 10px; color: #72767d; margin-top: 2px; }
-    .badge { background-color: #f04747; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; }
+    .item-list li.active { background-color: #42464d; color: #fff; font-weight: bold; }
+    
     .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; flex-shrink: 0; }
     .online { background-color: #43b581; }
     .offline { background-color: #747f8d; }
-    .role-tag { background: #5865f2; color: #fff; font-size: 10px; padding: 2px 4px; border-radius: 3px; margin-left: 4px; }
+    .role-tag { background: #5865f2; color: #fff; font-size: 10px; padding: 2px 4px; border-radius: 3px; margin-left: 6px; }
 
-    #main-chat { flex: 1; display: flex; flex-direction: column; background: #36393f; color: #dcddde; height: 100%; }
+    /* メインチャットエリア */
+    #main-chat { flex: 1; display: flex; flex-direction: column; background: #36393f; color: #dcddde; height: 100%; position: relative; }
     .chat-header {
       padding: 12px 16px; background: #36393f; border-bottom: 1px solid #2f3136;
       font-size: 16px; font-weight: bold; color: #fff; display: flex; justify-content: space-between; align-items: center;
     }
-    .header-controls { display: flex; align-items: center; gap: 8px; }
-    .notif-btn { background: #4f545c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
-    .notif-btn.active { background: #43b581; }
     
     #messages-container { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
     .message-item {
@@ -100,13 +110,8 @@
       padding: 10px 14px; border-radius: 6px; max-width: 85%; position: relative; width: fit-content;
     }
     .message-item.pinned { border: 2px solid #faa61a; background: #3c3f45; }
-    .pin-tag { font-size: 11px; color: #faa61a; font-weight: bold; margin-bottom: 4px; }
-    .reply-quote {
-      background: #202225; border-left: 3px solid #5865f2;
-      padding: 4px 8px; font-size: 12px; border-radius: 2px; margin-bottom: 6px; color: #b9bbbe;
-    }
     .message-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-    .message-user { font-weight: bold; color: #fff; font-size: 14px; cursor: pointer; }
+    .message-user { font-weight: bold; color: #fff; font-size: 14px; }
     .message-time { font-size: 11px; color: #72767d; }
     .message-text { font-size: 14px; word-break: break-all; color: #dcddde; white-space: pre-wrap; }
     .msg-media { max-width: 100%; max-height: 250px; border-radius: 6px; margin-top: 8px; }
@@ -115,46 +120,40 @@
     .message-item:hover .msg-actions { display: flex; }
     .msg-btn { background: #202225; border: none; color: #b9bbbe; padding: 2px 6px; font-size: 10px; border-radius: 3px; cursor: pointer; }
 
-    #reply-bar {
-      display: none; background: #2f3136; padding: 6px 12px;
-      border-left: 4px solid #5865f2; font-size: 12px; justify-content: space-between; align-items: center;
-    }
-
     .input-area { padding: 12px; background: #36393f; }
     .input-box { display: flex; background: #40444b; border-radius: 8px; padding: 0 8px; align-items: center; }
     .input-box input[type="text"] {
       flex: 1; background: transparent; border: none; color: #fff; padding: 10px 8px; font-size: 14px; outline: none;
     }
     .input-box button { background: #5865f2; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; }
-    .media-upload-btn { background: none; border: none; color: #b9bbbe; font-size: 18px; cursor: pointer; padding: 0 6px; }
 
+    /* モーダル (クリック・操作不具合防止) */
     .modal {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-      background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;
+      background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 3000;
     }
     .modal-content {
       background: #2f3136; color: #fff; padding: 20px; border-radius: 8px;
       width: 90%; max-width: 550px; max-height: 85vh; overflow-y: auto;
     }
-    .modal-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-    .modal-table th, .modal-table td { border: 1px solid #40444b; padding: 6px; text-align: left; font-size: 12px; }
-    .modal-close { background: #747f8d; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
-    
+    .modal-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .modal-table th, .modal-table td { border: 1px solid #40444b; padding: 8px; text-align: left; font-size: 12px; }
+    .modal-close { background: #747f8d; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-top: 12px; float: right; }
+
     .del-btn { background: #f04747; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; }
     .pin-btn { background: #faa61a; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-left: 4px; }
-    
-    .role-check-group { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; font-size: 12px; }
-    .role-check-group label { display: flex; align-items: center; gap: 4px; background: #202225; padding: 4px 8px; border-radius: 4px; }
   </style>
 </head>
 <body>
 
   <div id="auth-screen">
-    <h2 id="auth-title">ログイン</h2>
-    <input type="text" id="auth-username" placeholder="ユーザー名" autocomplete="off">
-    <input type="password" id="auth-password" placeholder="パスワード">
-    <button id="auth-submit-btn" onclick="handleAuth()">ログイン</button>
-    <div class="toggle-auth" id="auth-toggle-btn" onclick="toggleAuthMode()">新規登録はこちら</div>
+    <div class="auth-box">
+      <h2 id="auth-title">ログイン</h2>
+      <input type="text" id="auth-username" placeholder="ユーザー名" autocomplete="off">
+      <input type="password" id="auth-password" placeholder="パスワード">
+      <button id="auth-submit-btn" onclick="handleAuth()">ログイン</button>
+      <div class="toggle-auth" id="auth-toggle-btn" onclick="toggleAuthMode()">新規登録はこちら</div>
+    </div>
   </div>
 
   <div id="app-container" style="display: none;">
@@ -162,33 +161,25 @@
 
     <div id="sidebar">
       <div class="sidebar-header">
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <span id="display-user-name">ユーザー名</span>
-          <button class="profile-btn" onclick="openProfileModal(currentUser)">設定</button>
+        <span id="display-user-name">ユーザー名</span>
+        <button id="admin-panel-btn" style="display:none; background:#ff4757; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;" onclick="openAdminModal()">管理パネル</button>
+      </div>
+
+      <div class="section-header">
+        <span>📁 チャンネル・ジャンル</span>
+        <div>
+          <button id="add-genre-btn" class="add-btn" title="ジャンル作成" style="display:none; margin-right:6px;" onclick="createNewCategory()">📁+</button>
+          <button id="add-channel-btn" class="add-btn" title="チャンネル作成" style="display:none;" onclick="createNewChannel()">#+</button>
         </div>
-        <button id="admin-panel-btn" style="display:none; background:#ff4757; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:11px;" onclick="openAdminModal()">管理画面</button>
       </div>
 
-      <div class="section-title">
-        <span>チャンネル</span>
-        <button id="add-channel-btn" class="add-btn" style="display:none;" onclick="createNewChannel()">+</button>
-      </div>
-      <ul class="item-list" id="channel-list"></ul>
+      <div id="channel-categories-container"></div>
 
-      <div class="section-title"><span>ダイレクトメッセージ</span></div>
-      <ul class="item-list" id="active-dm-list"></ul>
+      <div class="section-header"><span>オンラインユーザー</span></div>
+      <ul class="item-list" id="online-user-list"></ul>
 
-      <div class="section-title">
-        <span>グループDM</span>
-        <button class="add-btn" onclick="openGroupDmModal()">+</button>
-      </div>
-      <ul class="item-list" id="group-dm-list"></ul>
-
-      <div class="section-title"><span>オンラインユーザー</span></div>
-      <ul class="item-list" id="online-dm-list"></ul>
-
-      <div class="section-title"><span>オフラインユーザー</span></div>
-      <ul class="item-list" id="offline-dm-list"></ul>
+      <div class="section-header"><span>オフラインユーザー</span></div>
+      <ul class="item-list" id="offline-user-list"></ul>
     </div>
 
     <div id="main-chat">
@@ -197,23 +188,13 @@
           <button class="mobile-menu-btn" onclick="toggleMobileSidebar()">☰</button>
           <span id="current-room-title"># general</span>
         </div>
-        <div class="header-controls">
-          <button id="notif-toggle-btn" class="notif-btn" onclick="toggleNotifications()">🔔 OFF</button>
-          <button id="clear-channel-btn" class="del-btn" style="display: none;" onclick="clearCurrentChannel()">全消去</button>
-        </div>
+        <button id="clear-channel-btn" class="del-btn" style="display: none;" onclick="clearCurrentChannel()">全消去</button>
       </div>
 
       <div id="messages-container"></div>
 
-      <div id="reply-bar">
-        <span id="reply-text-preview"></span>
-        <button onclick="cancelReply()" style="background:none; border:none; color:#f04747;">✕</button>
-      </div>
-
       <div class="input-area">
         <div class="input-box">
-          <button class="media-upload-btn" onclick="document.getElementById('media-file-input').click()">📷/🎥</button>
-          <input type="file" id="media-file-input" accept="image/*,video/*" style="display: none;" onchange="handleFileSelect(event)">
           <input type="text" id="message-input" placeholder="メッセージを入力..." onkeypress="handleKeyPress(event)">
           <button onclick="sendMessage()">送信</button>
         </div>
@@ -221,7 +202,7 @@
     </div>
   </div>
 
-  <!-- 管理者用 モーダル（カスタム権限作成含む） -->
+  <!-- 管理者用モーダル -->
   <div id="admin-modal" class="modal">
     <div class="modal-content">
       <h3>👑 開発者・権限管理パネル</h3>
@@ -229,31 +210,25 @@
       <h4 style="margin-top:12px;">🛡️ カスタム権限（ロール）の作成</h4>
       <div style="background:#202225; padding:10px; border-radius:6px; margin-bottom:12px;">
         <input type="text" id="new-role-name" placeholder="権限名（例: モデレーター、あ）" style="width:100%; padding:6px; margin-bottom:6px; background:#36393f; color:#fff; border:1px solid #40444b; border-radius:4px;">
-        <div class="role-check-group">
+        <div style="display:flex; flex-wrap:wrap; gap:8px; font-size:12px; margin-bottom:8px;">
           <label><input type="checkbox" id="perm-ban"> 通常BAN</label>
-          <label><input type="checkbox" id="perm-ipBan"> IP BAN</label>
           <label><input type="checkbox" id="perm-delMsg"> 他人の投稿削除</label>
-          <label><input type="checkbox" id="perm-editMsg"> 他人の投稿編集</label>
           <label><input type="checkbox" id="perm-createCh"> チャンネル作成</label>
           <label><input type="checkbox" id="perm-delCh"> チャンネル削除</label>
           <label><input type="checkbox" id="perm-clearCh"> チャンネル全消去</label>
         </div>
-        <button onclick="createCustomRole()" style="background:#43b581; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; width:100%; font-weight:bold;">この権限を作成</button>
+        <button onclick="createCustomRole()" style="background:#43b581; color:white; border:none; padding:6px; border-radius:4px; cursor:pointer; font-size:12px; width:100%; font-weight:bold;">ロールを作成</button>
       </div>
 
-      <h4>👥 ユーザーへの権限付与 & 管理</h4>
+      <h4>👥 ユーザー権限割り当て</h4>
       <table class="modal-table">
         <thead>
-          <tr>
-            <th>ユーザー名</th>
-            <th>付与されている権限</th>
-            <th>操作</th>
-          </tr>
+          <tr><th>ユーザー</th><th>権限（ロール）</th><th>操作</th></tr>
         </thead>
         <tbody id="admin-user-table"></tbody>
       </table>
 
-      <button class="modal-close" style="float: right;" onclick="closeAdminModal()">閉じる</button>
+      <button class="modal-close" onclick="closeAdminModal()">閉じる</button>
     </div>
   </div>
 
@@ -268,13 +243,8 @@
     let currentRoom = 'general';
 
     let chatHistory = {};
-    let unreadCounts = {};
     let onlineUserList = {};
-    let allRoles = {};
-
-    let replyingToMsg = null;
-    let selectedFileData = null;
-    let selectedFileType = null;
+    let channelStructure = { categories: [], channels: [], pinned: [] };
 
     function toggleMobileSidebar() {
       document.getElementById('sidebar').classList.toggle('open');
@@ -310,79 +280,124 @@
       document.getElementById('display-user-name').textContent = currentUser + (isDev ? ' 👑' : '');
 
       if (isDev) document.getElementById('admin-panel-btn').style.display = 'block';
-      if (myPermissions.createChannel || isDev) document.getElementById('add-channel-btn').style.display = 'inline-block';
+      if (myPermissions.createChannel || isDev) {
+        document.getElementById('add-genre-btn').style.display = 'inline-block';
+        document.getElementById('add-channel-btn').style.display = 'inline-block';
+      }
 
       socket.emit('register user', currentUser);
     });
 
     socket.on('auth error', (msg) => alert(msg));
-    socket.on('chat error', (msg) => alert(msg));
-    socket.on('banned notification', (msg) => { alert(msg); location.reload(); });
+    socket.on('channel error', (msg) => alert(msg));
 
-    socket.on('update channel list', (data) => {
-      const listEl = document.getElementById('channel-list');
-      listEl.innerHTML = '';
-
-      const renderChannel = (ch, isPinned) => {
-        const li = document.createElement('li');
-        if (ch === currentRoom) li.classList.add('active');
-        
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = `${isPinned ? '📌 ' : '# '}${ch}`;
-        li.appendChild(nameSpan);
-
-        const rightBox = document.createElement('div');
-        
-        if (myPermissions.pinChannel || isDev) {
-          const pinBtn = document.createElement('button');
-          pinBtn.className = 'pin-btn';
-          pinBtn.textContent = isPinned ? '解除' : '固定';
-          pinBtn.onclick = (e) => { e.stopPropagation(); socket.emit('toggle pin channel', ch); };
-          rightBox.appendChild(pinBtn);
-        }
-
-        if ((myPermissions.deleteChannel || isDev) && ch !== 'general' && ch !== 'random') {
-          const delBtn = document.createElement('button');
-          delBtn.className = 'del-btn';
-          delBtn.textContent = '❌';
-          delBtn.style.marginLeft = '4px';
-          delBtn.onclick = (e) => {
-            e.stopPropagation();
-            if (confirm(`チャンネル「#${ch}」を削除しますか？`)) socket.emit('delete channel', ch);
-          };
-          rightBox.appendChild(delBtn);
-        }
-
-        li.appendChild(rightBox);
-        li.onclick = () => { switchRoom(ch); closeMobileSidebar(); };
-        listEl.appendChild(li);
-      };
-
-      data.pinned.forEach(ch => renderChannel(ch, true));
-      data.normal.forEach(ch => renderChannel(ch, false));
+    // ★ ジャンル付きチャンネルリストのレンダリング
+    socket.on('update channel structure', (data) => {
+      channelStructure = data;
+      renderChannelStructure();
     });
+
+    function renderChannelStructure() {
+      const container = document.getElementById('channel-categories-container');
+      container.innerHTML = '';
+
+      const { categories, channels, pinned } = channelStructure;
+
+      categories.forEach(cat => {
+        const catBox = document.createElement('div');
+        const catTitle = document.createElement('div');
+        catTitle.className = 'genre-title';
+        catTitle.innerHTML = `<span>📁 ${cat}</span>`;
+        catBox.appendChild(catTitle);
+
+        const ul = document.createElement('ul');
+        ul.className = 'item-list';
+
+        const catChannels = channels.filter(c => c.category === cat);
+        catChannels.forEach(chObj => {
+          const ch = chObj.name;
+          const isPinned = pinned.includes(ch);
+
+          const li = document.createElement('li');
+          if (ch === currentRoom) li.classList.add('active');
+
+          const nameSpan = document.createElement('span');
+          nameSpan.textContent = `${isPinned ? '📌 ' : '# '}${ch}`;
+          li.appendChild(nameSpan);
+
+          const rightBox = document.createElement('div');
+
+          if (myPermissions.pinChannel || isDev) {
+            const pinBtn = document.createElement('button');
+            pinBtn.className = 'pin-btn';
+            pinBtn.textContent = isPinned ? '解除' : '固定';
+            pinBtn.onclick = (e) => { e.stopPropagation(); socket.emit('toggle pin channel', ch); };
+            rightBox.appendChild(pinBtn);
+          }
+
+          if ((myPermissions.deleteChannel || isDev) && ch !== 'general' && ch !== 'random') {
+            const delBtn = document.createElement('button');
+            delBtn.className = 'del-btn';
+            delBtn.textContent = '❌';
+            delBtn.style.marginLeft = '4px';
+            delBtn.onclick = (e) => {
+              e.stopPropagation();
+              if (confirm(`チャンネル「#${ch}」を削除しますか？`)) socket.emit('delete channel', ch);
+            };
+            rightBox.appendChild(delBtn);
+          }
+
+          li.appendChild(rightBox);
+          li.onclick = () => { switchRoom(ch); closeMobileSidebar(); };
+          ul.appendChild(li);
+        });
+
+        catBox.appendChild(ul);
+        container.appendChild(catBox);
+      });
+    }
+
+    // ★ ジャンル（カテゴリ）の追加要求
+    function createNewCategory() {
+      const catName = prompt('作成するジャンル（カテゴリ）名を入力してください:');
+      if (catName) socket.emit('create category', catName.trim());
+    }
+
+    // ★ チャンネル追加（ジャンル選択）
+    function createNewChannel() {
+      const channelName = prompt('新しいチャンネル名を入力してください:');
+      if (!channelName) return;
+
+      if (channelStructure.categories.length === 0) {
+        return socket.emit('create channel', { name: channelName.trim(), category: '基本' });
+      }
+
+      const catListStr = channelStructure.categories.map((c, i) => `${i + 1}: ${c}`).join('\n');
+      const selectedIndex = prompt(`所属させるジャンルの番号を選んでください:\n${catListStr}`, '1');
+
+      let selectedCategory = channelStructure.categories[0];
+      if (selectedIndex && !isNaN(selectedIndex)) {
+        const idx = parseInt(selectedIndex) - 1;
+        if (channelStructure.categories[idx]) selectedCategory = channelStructure.categories[idx];
+      }
+
+      socket.emit('create channel', { name: channelName.trim(), category: selectedCategory });
+    }
 
     socket.on('update user list', (users) => {
-      onlineUserList = users;
-      renderUserLists();
-    });
+      const onlineEl = document.getElementById('online-user-list');
+      const offlineEl = document.getElementById('offline-user-list');
+      onlineEl.innerHTML = ''; offlineEl.innerHTML = '';
 
-    function renderUserLists() {
-      const onlineListEl = document.getElementById('online-dm-list');
-      const offlineListEl = document.getElementById('offline-dm-list');
-      onlineListEl.innerHTML = '';
-      offlineListEl.innerHTML = '';
-
-      for (const [uname, info] of Object.entries(onlineUserList)) {
+      for (const [uname, info] of Object.entries(users)) {
         if (uname === currentUser) continue;
-
         const li = document.createElement('li');
+        
         const dot = document.createElement('span');
         dot.className = `status-dot ${info.isOnline ? 'online' : 'offline'}`;
-
+        
         const nameSpan = document.createElement('span');
         nameSpan.textContent = uname;
-
         if (info.roleName && info.roleName !== '一般ユーザー') {
           const tag = document.createElement('span');
           tag.className = 'role-tag';
@@ -393,10 +408,10 @@
         li.appendChild(dot);
         li.appendChild(nameSpan);
 
-        if (info.isOnline) onlineListEl.appendChild(li);
-        else offlineListEl.appendChild(li);
+        if (info.isOnline) onlineEl.appendChild(li);
+        else offlineEl.appendChild(li);
       }
-    }
+    });
 
     socket.on('load history', (history) => {
       chatHistory = history;
@@ -408,26 +423,17 @@
       document.getElementById('current-room-title').textContent = `# ${roomName}`;
       document.getElementById('clear-channel-btn').style.display = (myPermissions.clearChannel || isDev) ? 'block' : 'none';
       socket.emit('join room', roomName);
+      renderChannelStructure();
       renderMessages();
     }
 
     function sendMessage() {
       const input = document.getElementById('message-input');
       const text = input.value.trim();
-      if (!text && !selectedFileData) return;
+      if (!text) return;
 
-      socket.emit('chat message', {
-        targetRoom: currentRoom,
-        text: text,
-        fileData: selectedFileData,
-        fileType: selectedFileType,
-        replyTo: replyingToMsg ? { user: replyingToMsg.user, text: replyingToMsg.text || '[メディア]' } : null
-      });
-
+      socket.emit('chat message', { targetRoom: currentRoom, text });
       input.value = '';
-      selectedFileData = null;
-      selectedFileType = null;
-      cancelReply();
     }
 
     function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
@@ -443,60 +449,20 @@
       container.innerHTML = '';
 
       const msgs = chatHistory[currentRoom] || [];
-      const sortedMsgs = msgs.slice().sort((a, b) => (a.isPinned ? -1 : 1));
-
-      sortedMsgs.forEach(msg => {
+      msgs.forEach(msg => {
         const item = document.createElement('div');
-        item.className = 'message-item' + (msg.isPinned ? ' pinned' : '');
-
-        if (msg.isPinned) {
-          const pinTag = document.createElement('div');
-          pinTag.className = 'pin-tag';
-          pinTag.textContent = '📌 ピン留めされた投稿';
-          item.appendChild(pinTag);
-        }
+        item.className = 'message-item';
 
         const header = document.createElement('div');
         header.className = 'message-header';
         header.innerHTML = `<span class="message-user">${msg.user}</span><span class="message-time">${msg.time}</span>`;
         item.appendChild(header);
 
-        if (msg.text) {
-          const textDiv = document.createElement('div');
-          textDiv.className = 'message-text';
-          textDiv.textContent = msg.text;
-          item.appendChild(textDiv);
-        }
+        const textDiv = document.createElement('div');
+        textDiv.className = 'message-text';
+        textDiv.textContent = msg.text;
+        item.appendChild(textDiv);
 
-        if (msg.fileData) {
-          const media = document.createElement(msg.fileType === 'video' ? 'video' : 'img');
-          media.src = msg.fileData;
-          if (msg.fileType === 'video') media.controls = true;
-          media.className = 'msg-media';
-          item.appendChild(media);
-        }
-
-        const actions = document.createElement('div');
-        actions.className = 'msg-actions';
-
-        if (myPermissions.pinMessage || isDev) {
-          const pinBtn = document.createElement('button');
-          pinBtn.className = 'msg-btn';
-          pinBtn.textContent = '📌 固定';
-          pinBtn.onclick = () => socket.emit('toggle pin message', { id: msg.id, targetRoom: currentRoom });
-          actions.appendChild(pinBtn);
-        }
-
-        const canDelete = (msg.user === currentUser && !msg.isPinned) || myPermissions.deleteMessage || isDev;
-        if (canDelete) {
-          const delBtn = document.createElement('button');
-          delBtn.className = 'msg-btn';
-          delBtn.textContent = '削除';
-          delBtn.onclick = () => socket.emit('delete message', { id: msg.id, targetRoom: currentRoom });
-          actions.appendChild(delBtn);
-        }
-
-        item.appendChild(actions);
         container.appendChild(item);
       });
 
@@ -510,9 +476,7 @@
       const roleId = 'role_' + Date.now();
       const permissions = {
         ban: document.getElementById('perm-ban').checked,
-        ipBan: document.getElementById('perm-ipBan').checked,
         deleteMessage: document.getElementById('perm-delMsg').checked,
-        editMessage: document.getElementById('perm-editMsg').checked,
         createChannel: document.getElementById('perm-createCh').checked,
         deleteChannel: document.getElementById('perm-delCh').checked,
         clearChannel: document.getElementById('perm-clearCh').checked
@@ -533,7 +497,6 @@
     }
 
     socket.on('admin user list result', (data) => {
-      allRoles = data.roles;
       const tbody = document.getElementById('admin-user-table');
       tbody.innerHTML = '';
 
@@ -541,20 +504,17 @@
         if (uname === 'アルパカ') continue;
 
         const tr = document.createElement('tr');
-        const tdName = document.createElement('td');
-        tdName.textContent = uname;
+        tr.innerHTML = `<td>${uname}</td>`;
 
         const tdRole = document.createElement('td');
         const select = document.createElement('select');
-        select.style.padding = '4px';
-        select.style.borderRadius = '4px';
 
         const optNone = document.createElement('option');
         optNone.value = '';
         optNone.textContent = '一般ユーザー (権限なし)';
         select.appendChild(optNone);
 
-        for (const [rId, rData] of Object.entries(allRoles)) {
+        for (const [rId, rData] of Object.entries(data.roles)) {
           if (rId === 'admin') continue;
           const opt = document.createElement('option');
           opt.value = rId;
@@ -563,9 +523,7 @@
           select.appendChild(opt);
         }
 
-        select.onchange = () => {
-          socket.emit('admin assign role', { targetUser: uname, roleId: select.value });
-        };
+        select.onchange = () => socket.emit('admin assign role', { targetUser: uname, roleId: select.value });
         tdRole.appendChild(select);
 
         const tdAction = document.createElement('td');
@@ -575,15 +533,13 @@
         banBtn.onclick = () => socket.emit('admin ban user', uname);
         tdAction.appendChild(banBtn);
 
-        tr.appendChild(tdName);
         tr.appendChild(tdRole);
         tr.appendChild(tdAction);
         tbody.appendChild(tr);
       }
     });
 
-    socket.on('roles updated', (roles) => { allRoles = roles; });
-    socket.on('admin role assign success', () => { alert('権限を更新しました！'); });
+    socket.on('admin role assign success', () => alert('権限を更新しました！'));
   </script>
 </body>
 </html>
