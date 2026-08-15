@@ -84,6 +84,13 @@
       display: flex; flex-direction: column; background: #2f3136;
       padding: 10px 14px; border-radius: 6px; max-width: 80%; position: relative;
     }
+    .message-item.pinned {
+      border: 2px solid #faa61a;
+      background: #3c3f45;
+    }
+    .pin-tag {
+      font-size: 11px; color: #faa61a; font-weight: bold; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;
+    }
     
     .reply-quote {
       background: #202225; border-left: 3px solid #5865f2;
@@ -94,7 +101,13 @@
     .message-user { font-weight: bold; color: #fff; font-size: 14px; cursor: pointer; }
     .message-user:hover { text-decoration: underline; }
     .message-time { font-size: 11px; color: #72767d; }
-    .message-text { font-size: 14px; word-break: break-all; color: #dcddde; }
+    .message-text { font-size: 14px; word-break: break-all; color: #dcddde; white-space: pre-wrap; }
+    
+    /* メディアプレビュー用 */
+    .msg-media {
+      max-width: 100%; max-height: 300px; border-radius: 6px; margin-top: 8px; object-fit: contain;
+    }
+
     .edited-tag { font-size: 10px; color: #72767d; margin-left: 4px; }
     .msg-actions { display: none; position: absolute; right: 10px; top: 10px; gap: 6px; }
     .message-item:hover .msg-actions { display: flex; }
@@ -112,16 +125,26 @@
     #reply-bar button { background: none; border: none; color: #f04747; cursor: pointer; font-size: 14px; }
 
     .input-area { padding: 16px; background: #36393f; }
-    .input-box { display: flex; background: #40444b; border-radius: 8px; padding: 0 12px; }
-    .input-box input {
+    .input-box { display: flex; background: #40444b; border-radius: 8px; padding: 0 12px; align-items: center; }
+    .input-box input[type="text"] {
       flex: 1; background: transparent; border: none;
-      color: #fff; padding: 12px 0; font-size: 14px; outline: none;
+      color: #fff; padding: 12px 8px; font-size: 14px; outline: none;
     }
     .input-box button {
       background: #5865f2; color: white; border: none;
-      padding: 0 16px; margin: 6px 0; border-radius: 4px; cursor: pointer; font-weight: bold;
+      padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;
     }
     .input-box button:hover { background: #4752c4; }
+
+    .media-upload-btn {
+      background: none; border: none; color: #b9bbbe; font-size: 18px; cursor: pointer; padding: 0 8px;
+    }
+    .media-upload-btn:hover { color: #fff; }
+
+    .file-preview-bar {
+      display: none; background: #2f3136; padding: 8px 12px; font-size: 12px; color: #43b581;
+      justify-content: space-between; align-items: center; border-radius: 4px 4px 0 0;
+    }
 
     .modal {
       display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -139,6 +162,7 @@
 
     .del-btn { background: #f04747; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; }
     .del-btn:hover { opacity: 0.8; }
+    .pin-btn { background: #faa61a; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-left: 4px; }
 
     .user-select-list { max-height: 200px; overflow-y: auto; margin: 12px 0; background: #36393f; padding: 10px; border-radius: 4px; }
     .user-select-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; }
@@ -221,8 +245,17 @@
         <button onclick="cancelReply()">✕</button>
       </div>
 
+      <div id="file-preview-bar" class="file-preview-bar">
+        <span id="file-preview-name">📎 ファイルが選択されました</span>
+        <button onclick="clearSelectedFile()" style="background:none; border:none; color:#f04747; cursor:pointer; font-size:14px;">✕</button>
+      </div>
+
       <div class="input-area">
         <div class="input-box">
+          <!-- 添付ファイルボタン -->
+          <button class="media-upload-btn" onclick="document.getElementById('media-file-input').click()" title="画像・動画を添付">📷/🎥</button>
+          <input type="file" id="media-file-input" accept="image/*,video/*" style="display: none;" onchange="handleFileSelect(event)">
+
           <input type="text" id="message-input" placeholder="メッセージを入力..." onkeypress="handleKeyPress(event)">
           <button onclick="sendMessage()">送信</button>
         </div>
@@ -316,6 +349,9 @@
     let notificationsEnabled = false;
     let replyingToMsg = null;
 
+    let selectedFileData = null;
+    let selectedFileType = null;
+
     function toggleNotifications() {
       if (!notificationsEnabled) {
         if ("Notification" in window) {
@@ -373,7 +409,7 @@
         else roomLabel = `# ${roomLabel}`;
 
         new Notification(`新着メッセージ (${roomLabel})`, {
-          body: `${msgObj.user}: ${msgObj.text}`,
+          body: `${msgObj.user}: ${msgObj.text || (msgObj.fileType === 'image' ? '[画像]' : '[動画]')}`,
           icon: 'https://cdn-icons-png.flaticon.com/512/732/732200.png'
         });
       }
@@ -415,47 +451,71 @@
     });
 
     socket.on('auth error', (msg) => alert(msg));
+    socket.on('chat error', (msg) => alert(msg));
     socket.on('banned notification', (msg) => {
       alert(msg);
       location.reload();
     });
 
-    socket.on('update channel list', (channels) => {
+    socket.on('update channel list', (data) => {
       const listEl = document.getElementById('channel-list');
       listEl.innerHTML = '';
 
-      channels.forEach(ch => {
+      const renderChannelItem = (ch, isPinned) => {
         const li = document.createElement('li');
         if (ch === currentRoom) li.classList.add('active');
         
         const nameSpan = document.createElement('span');
-        nameSpan.textContent = `# ${ch}`;
+        nameSpan.textContent = `${isPinned ? '📌 ' : '# '}${ch}`;
         li.appendChild(nameSpan);
+
+        const rightBox = document.createElement('div');
+        rightBox.style.display = 'flex';
+        rightBox.style.alignItems = 'center';
 
         if (unreadCounts[ch]) {
           const badge = document.createElement('span');
           badge.className = 'badge';
           badge.textContent = unreadCounts[ch];
-          li.appendChild(badge);
+          rightBox.appendChild(badge);
         }
 
-        if (currentUserIsAdmin && ch !== 'general' && ch !== 'random') {
-          const delBtn = document.createElement('button');
-          delBtn.className = 'del-btn';
-          delBtn.textContent = '❌';
-          delBtn.style.marginLeft = '8px';
-          delBtn.onclick = (e) => {
+        if (currentUserIsAdmin) {
+          // ピン留めボタン
+          const pinBtn = document.createElement('button');
+          pinBtn.className = 'pin-btn';
+          pinBtn.textContent = isPinned ? '固定解除' : '固定';
+          pinBtn.onclick = (e) => {
             e.stopPropagation();
-            if (confirm(`チャンネル「#${ch}」を削除しますか？`)) {
-              socket.emit('delete channel', ch);
-            }
+            socket.emit('toggle pin channel', ch);
           };
-          li.appendChild(delBtn);
+          rightBox.appendChild(pinBtn);
+
+          // 削除ボタン
+          if (ch !== 'general' && ch !== 'random') {
+            const delBtn = document.createElement('button');
+            delBtn.className = 'del-btn';
+            delBtn.textContent = '❌';
+            delBtn.style.marginLeft = '4px';
+            delBtn.onclick = (e) => {
+              e.stopPropagation();
+              if (confirm(`チャンネル「#${ch}」を削除しますか？`)) {
+                socket.emit('delete channel', ch);
+              }
+            };
+            rightBox.appendChild(delBtn);
+          }
         }
 
+        li.appendChild(rightBox);
         li.onclick = () => switchRoom(ch);
         listEl.appendChild(li);
-      });
+      };
+
+      // 固定チャンネルを先頭にレンダリング
+      data.pinned.forEach(ch => renderChannelItem(ch, true));
+      // 通常チャンネルをあいうえお順にレンダリング
+      data.normal.forEach(ch => renderChannelItem(ch, false));
     });
 
     socket.on('update user list', (users) => {
@@ -744,17 +804,37 @@
     }
 
     socket.on('group dm created', (groupRoom) => switchRoom(groupRoom));
-    socket.on('channel error', (msg) => alert(msg));
-    socket.on('channel deleted', (deletedChannel) => {
-      if (currentRoom === deletedChannel) {
-        alert(`チャンネル #${deletedChannel} が削除されました。general へ移動します。`);
-        switchRoom('general');
+
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      if (file.size > 50 * 1024 * 1024) {
+        alert("ファイルサイズが大きすぎます (最大 50MB まで)");
+        return;
       }
-    });
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        selectedFileData = evt.target.result;
+        selectedFileType = file.type.startsWith('video/') ? 'video' : 'image';
+        
+        document.getElementById('file-preview-name').textContent = `📎 添付中: ${file.name}`;
+        document.getElementById('file-preview-bar').style.display = 'flex';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearSelectedFile() {
+      selectedFileData = null;
+      selectedFileType = null;
+      document.getElementById('media-file-input').value = '';
+      document.getElementById('file-preview-bar').style.display = 'none';
+    }
 
     function startReply(msgObj) {
       replyingToMsg = msgObj;
-      document.getElementById('reply-text-preview').textContent = `返信先 @${msgObj.user}: ${msgObj.text}`;
+      document.getElementById('reply-text-preview').textContent = `返信先 @${msgObj.user}: ${msgObj.text || '[メディア]'}`;
       document.getElementById('reply-bar').style.display = 'flex';
       document.getElementById('message-input').focus();
     }
@@ -767,15 +847,19 @@
     function sendMessage() {
       const input = document.getElementById('message-input');
       const text = input.value.trim();
-      if (!text) return;
+
+      if (!text && !selectedFileData) return;
 
       socket.emit('chat message', {
         targetRoom: currentRoom,
         text: text,
-        replyTo: replyingToMsg ? { user: replyingToMsg.user, text: replyingToMsg.text } : null
+        fileData: selectedFileData,
+        fileType: selectedFileType,
+        replyTo: replyingToMsg ? { user: replyingToMsg.user, text: replyingToMsg.text || '[メディア]' } : null
       });
 
       input.value = '';
+      clearSelectedFile();
       cancelReply();
     }
 
@@ -803,9 +887,24 @@
       container.innerHTML = '';
 
       const msgs = chatHistory[currentRoom] || [];
-      msgs.forEach(msg => {
+
+      // ピン留めされたメッセージを最上部にソート
+      const sortedMsgs = msgs.slice().sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return 0;
+      });
+
+      sortedMsgs.forEach(msg => {
         const item = document.createElement('div');
-        item.className = 'message-item';
+        item.className = 'message-item' + (msg.isPinned ? ' pinned' : '');
+
+        if (msg.isPinned) {
+          const pinTag = document.createElement('div');
+          pinTag.className = 'pin-tag';
+          pinTag.textContent = '📌 ピン留めされた投稿';
+          item.appendChild(pinTag);
+        }
 
         if (msg.replyTo) {
           const replyQuote = document.createElement('div');
@@ -828,20 +927,37 @@
 
         header.appendChild(userSpan);
         header.appendChild(timeSpan);
+        item.appendChild(header);
 
-        const textDiv = document.createElement('div');
-        textDiv.className = 'message-text';
-        textDiv.textContent = msg.text;
+        if (msg.text) {
+          const textDiv = document.createElement('div');
+          textDiv.className = 'message-text';
+          textDiv.textContent = msg.text;
 
-        if (msg.isEdited) {
-          const editTag = document.createElement('span');
-          editTag.className = 'edited-tag';
-          editTag.textContent = '(編集済み)';
-          textDiv.appendChild(editTag);
+          if (msg.isEdited) {
+            const editTag = document.createElement('span');
+            editTag.className = 'edited-tag';
+            editTag.textContent = '(編集済み)';
+            textDiv.appendChild(editTag);
+          }
+          item.appendChild(textDiv);
         }
 
-        item.appendChild(header);
-        item.appendChild(textDiv);
+        // 画像・動画表示
+        if (msg.fileData) {
+          if (msg.fileType === 'image') {
+            const img = document.createElement('img');
+            img.src = msg.fileData;
+            img.className = 'msg-media';
+            item.appendChild(img);
+          } else if (msg.fileType === 'video') {
+            const video = document.createElement('video');
+            video.src = msg.fileData;
+            video.controls = true;
+            video.className = 'msg-media';
+            item.appendChild(video);
+          }
+        }
 
         const actions = document.createElement('div');
         actions.className = 'msg-actions';
@@ -852,7 +968,21 @@
         replyBtn.onclick = () => startReply(msg);
         actions.appendChild(replyBtn);
 
-        if (msg.user === currentUser || currentUserIsAdmin) {
+        // 開発者専用ピン留めボタン
+        if (currentUserIsAdmin) {
+          const pinBtn = document.createElement('button');
+          pinBtn.className = 'msg-btn';
+          pinBtn.style.color = '#faa61a';
+          pinBtn.textContent = msg.isPinned ? 'ピン解除' : '📌 ピン留め';
+          pinBtn.onclick = () => {
+            socket.emit('toggle pin message', { id: msg.id, targetRoom: currentRoom });
+          };
+          actions.appendChild(pinBtn);
+        }
+
+        // 編集・削除ボタン（★固定メッセージは元の投稿主でも操作不可）
+        const canManage = currentUserIsAdmin || (msg.user === currentUser && !msg.isPinned);
+        if (canManage) {
           const editBtn = document.createElement('button');
           editBtn.className = 'msg-btn';
           editBtn.textContent = '編集';
@@ -875,7 +1005,7 @@
 
     function editMessage(id, oldText) {
       const newText = prompt("メッセージを編集:", oldText);
-      if (newText && newText !== oldText) {
+      if (newText !== null && newText !== oldText) {
         socket.emit('edit message', { id, newText, targetRoom: currentRoom });
       }
     }
@@ -903,6 +1033,17 @@
       if (history) {
         chatHistory[data.targetRoom] = history.filter(m => m.id !== data.id);
         if (data.targetRoom === currentRoom) renderMessages();
+      }
+    });
+
+    socket.on('update pin message', (data) => {
+      const history = chatHistory[data.targetRoom];
+      if (history) {
+        const msg = history.find(m => m.id === data.id);
+        if (msg) {
+          msg.isPinned = data.isPinned;
+          if (data.targetRoom === currentRoom) renderMessages();
+        }
       }
     });
 
@@ -949,7 +1090,6 @@
 
         const tdAction = document.createElement('td');
         if (uname !== 'アルパカ') {
-          // ① 通常アカウントBANボタン
           const btn = document.createElement('button');
           btn.className = 'del-btn';
           btn.textContent = isBanned ? 'BAN解除' : 'BAN';
@@ -965,7 +1105,6 @@
           };
           tdAction.appendChild(btn);
 
-          // ② IP BANボタン (未BAN時のみ表示)
           if (!isBanned) {
             const ipBanBtn = document.createElement('button');
             ipBanBtn.className = 'del-btn';
@@ -973,7 +1112,7 @@
             ipBanBtn.style.backgroundColor = '#8c7ae6';
             ipBanBtn.style.marginLeft = '6px';
             ipBanBtn.onclick = () => {
-              if (confirm(`【警告】「${uname}」をIP BANしますか？\n同じIP（Wi-Fi等）からの新規登録も不可になります。`)) {
+              if (confirm(`【警告】「${uname}」をIP BANしますか？\n同じIPからの接続も全遮断されます。`)) {
                 socket.emit('admin ip ban user', uname);
               }
             };
