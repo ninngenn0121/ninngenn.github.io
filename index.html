@@ -3,565 +3,881 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>リアルタイムチャット</title>
+  <title>チャットアプリ</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: sans-serif; display: flex; height: 100vh; background: #f0f2f5; }
-    
-    /* ログインモーダル */
-    #login-screen {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
-      display: flex; justify-content: center; align-items: center; z-index: 100;
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
-    .login-box { background: white; padding: 30px; border-radius: 8px; text-align: center; width: 320px; }
-    .login-box input { padding: 10px; width: 100%; margin: 8px 0; font-size: 15px; border: 1px solid #ccc; border-radius: 4px; }
-    .login-box button { padding: 10px; width: 100%; font-size: 16px; cursor: pointer; background: #0084ff; color: white; border: none; border-radius: 4px; margin-top: 10px; }
-    .toggle-auth { margin-top: 15px; font-size: 13px; color: #0084ff; cursor: pointer; text-decoration: underline; }
-
-    #sidebar { width: 270px; background: #2f3136; color: white; padding: 15px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
-    #main-chat { flex: 1; display: flex; flex-direction: column; background: white; }
-    
-    h3 { font-size: 12px; text-transform: uppercase; color: #8e9297; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-    ul { list-style: none; }
-    li { 
-      padding: 8px 10px; border-radius: 4px; cursor: pointer; margin-bottom: 4px; color: #dcddde; 
-      display: flex; justify-content: space-between; align-items: center; font-size: 13px;
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f0f2f5;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
-    li:hover, li.active { background: #393c43; color: white; }
-    
-    .user-info { display: flex; flex-direction: column; overflow: hidden; }
-    .user-name { font-weight: 500; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
-    .last-seen { font-size: 10px; color: #96989d; }
 
+    /* ログイン・登録画面 */
+    #auth-screen {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 360px;
+      text-align: center;
+    }
+    #auth-screen h2 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+    #auth-screen input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    #auth-screen button {
+      width: 100%;
+      padding: 10px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-bottom: 8px;
+    }
+    #auth-screen button:hover {
+      background-color: #0056b3;
+    }
+    .toggle-auth {
+      color: #007bff;
+      cursor: pointer;
+      font-size: 12px;
+      text-decoration: underline;
+    }
+
+    /* メインチャット画面 */
+    #app-container {
+      display: flex;
+      width: 95vw;
+      height: 90vh;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    /* サイドバー */
+    #sidebar {
+      width: 260px;
+      background-color: #2f3136;
+      color: #dcddde;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #202225;
+    }
+    .sidebar-header {
+      padding: 16px;
+      background: #202225;
+      font-weight: bold;
+      color: #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .section-title {
+      padding: 12px 16px 4px;
+      font-size: 12px;
+      font-weight: bold;
+      color: #8e9297;
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .add-btn {
+      background: none;
+      border: none;
+      color: #8e9297;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .add-btn:hover {
+      color: #fff;
+    }
+    .item-list {
+      list-style: none;
+      padding: 0 8px;
+    }
+    .item-list li {
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 2px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .item-list li:hover {
+      background-color: #393c43;
+      color: #fff;
+    }
+    .item-list li.active {
+      background-color: #42464d;
+      color: #fff;
+    }
     .badge {
-      background-color: #f23f43; color: white; font-size: 11px; font-weight: bold;
-      padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center; display: inline-block;
+      background-color: #f04747;
+      color: white;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+    }
+    .online { background-color: #43b581; }
+    .offline { background-color: #747f8d; }
+    .admin-badge {
+      background: #ff4757;
+      color: #fff;
+      font-size: 10px;
+      padding: 2px 4px;
+      border-radius: 3px;
+      margin-left: 4px;
     }
 
-    .admin-btn { background: #d9480f; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-bottom: 6px; width: 100%; text-align: left; }
-    .admin-btn:hover { background: #c2255c; }
-
-    #chat-header { padding: 15px; border-bottom: 1px solid #e3e5e8; font-weight: bold; font-size: 17px; display: flex; justify-content: space-between; align-items: center; }
-    #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-    
-    .message { 
-      padding: 8px 12px; background: #e4e6eb; border-radius: 8px; max-width: 70%; word-break: break-all; 
-      position: relative; display: flex; flex-direction: column;
+    /* メインチャットエリア */
+    #main-chat {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #36393f;
+      color: #dcddde;
     }
-    .message.my-msg { background: #0084ff; color: white; align-self: flex-end; }
-    .message .sender { font-size: 12px; opacity: 0.7; margin-bottom: 2px; }
-    .message .text { font-size: 15px; }
-
-    .msg-footer { display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 4px; }
-    .msg-time { font-size: 10px; opacity: 0.45; }
-    .edited-mark { font-size: 10px; opacity: 0.45; }
-
-    .action-btn {
-      background: none; border: none; color: inherit; opacity: 0.5; font-size: 11px;
-      cursor: pointer; text-decoration: underline; padding: 0; display: none;
+    .chat-header {
+      padding: 16px;
+      background: #36393f;
+      border-bottom: 1px solid #2f3136;
+      font-size: 18px;
+      font-weight: bold;
+      color: #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
-    .message:hover .action-btn { display: inline; }
-    .action-btn:hover { opacity: 1; }
+    #messages-container {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .message-item {
+      display: flex;
+      flex-direction: column;
+      background: #2f3136;
+      padding: 10px 14px;
+      border-radius: 6px;
+      max-width: 80%;
+      position: relative;
+    }
+    .message-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .message-user {
+      font-weight: bold;
+      color: #fff;
+      font-size: 14px;
+    }
+    .message-time {
+      font-size: 11px;
+      color: #72767d;
+    }
+    .message-text {
+      font-size: 14px;
+      word-break: break-all;
+      color: #dcddde;
+    }
+    .edited-tag {
+      font-size: 10px;
+      color: #72767d;
+      margin-left: 4px;
+    }
+    .msg-actions {
+      display: none;
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      gap: 6px;
+    }
+    .message-item:hover .msg-actions {
+      display: flex;
+    }
+    .msg-btn {
+      background: #202225;
+      border: none;
+      color: #b9bbbe;
+      padding: 2px 6px;
+      font-size: 11px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .msg-btn:hover {
+      color: #fff;
+      background: #4f545c;
+    }
 
-    #form { padding: 15px; border-top: 1px solid #e3e5e8; display: flex; gap: 10px; }
-    #input { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 20px; outline: none; font-size: 16px; }
-    #form button { padding: 10px 20px; background: #0084ff; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 16px; }
+    /* 入力エリア */
+    .input-area {
+      padding: 16px;
+      background: #36393f;
+    }
+    .input-box {
+      display: flex;
+      background: #40444b;
+      border-radius: 8px;
+      padding: 0 12px;
+    }
+    .input-box input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #fff;
+      padding: 12px 0;
+      font-size: 14px;
+      outline: none;
+    }
+    .input-box button {
+      background: #5865f2;
+      color: white;
+      border: none;
+      padding: 0 16px;
+      margin: 6px 0;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .input-box button:hover {
+      background: #4752c4;
+    }
 
-    /* モーダル用共通スタイル */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 200; }
-    .modal-box { background: white; padding: 20px; border-radius: 8px; max-width: 480px; width: 90%; max-height: 80vh; overflow-y: auto; color: #333; }
-    .modal-box h3 { color: #111; font-size: 16px; margin-bottom: 12px; }
-    .list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; font-size: 14px; }
-    .btn-danger { background: #e03131; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
-    .btn-success { background: #2f9e44; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    /* 管理者モーダル */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      background: #2f3136;
+      color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      width: 500px;
+      max-width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal-content h3 {
+      margin-bottom: 12px;
+      border-bottom: 1px solid #40444b;
+      padding-bottom: 8px;
+    }
+    .modal-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 16px;
+    }
+    .modal-table th, .modal-table td {
+      border: 1px solid #40444b;
+      padding: 8px;
+      text-align: left;
+      font-size: 13px;
+    }
+    .modal-close {
+      background: #747f8d;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      float: right;
+    }
+
+    .del-btn {
+      background: #f04747;
+      color: white;
+      border: none;
+      padding: 2px 6px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .del-btn:hover {
+      background: #d83c3c;
+    }
   </style>
 </head>
 <body>
 
-  <!-- 認証モーダル -->
-  <div id="login-screen">
-    <div class="login-box">
-      <h2 id="auth-title">ログイン</h2>
-      <input type="text" id="auth-username" placeholder="ユーザー名">
-      <input type="password" id="auth-password" placeholder="パスワード">
-      <button id="auth-btn" onclick="submitAuth()">ログイン</button>
-      <div class="toggle-auth" id="toggle-auth-btn" onclick="toggleAuthMode()">アカウントをお持ちでない方（新規登録）</div>
+  <!-- ログイン / 登録画面 -->
+  <div id="auth-screen">
+    <h2 id="auth-title">ログイン</h2>
+    <input type="text" id="auth-username" placeholder="ユーザー名" autocomplete="off">
+    <input type="password" id="auth-password" placeholder="パスワード">
+    <button id="auth-submit-btn" onclick="handleAuth()">ログイン</button>
+    <div class="toggle-auth" id="auth-toggle-btn" onclick="toggleAuthMode()">新規登録はこちら</div>
+  </div>
+
+  <!-- メインチャット画面 -->
+  <div id="app-container" style="display: none;">
+    <!-- サイドバー -->
+    <div id="sidebar">
+      <div class="sidebar-header">
+        <span id="display-user-name">ユーザー名</span>
+        <button id="admin-panel-btn" style="display:none; background:#ff4757; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:12px;" onclick="openAdminModal()">管理画面</button>
+      </div>
+
+      <!-- チャンネルエリア -->
+      <div class="section-title">
+        <span>チャンネル</span>
+        <button class="add-btn" onclick="createNewChannel()" title="チャンネルを追加">+</button>
+      </div>
+      <ul class="item-list" id="channel-list"></ul>
+
+      <!-- ダイレクトメッセージエリア -->
+      <div class="section-title">
+        <span>ダイレクトメッセージ</span>
+      </div>
+      <ul class="item-list" id="dm-user-list"></ul>
+    </div>
+
+    <!-- チャットメインエリア -->
+    <div id="main-chat">
+      <div class="chat-header">
+        <span id="current-room-title"># general</span>
+        <button id="clear-channel-btn" class="del-btn" style="display: none;" onclick="clearCurrentChannel()">チャンネル内全消去</button>
+      </div>
+
+      <div id="messages-container"></div>
+
+      <div class="input-area">
+        <div class="input-box">
+          <input type="text" id="message-input" placeholder="メッセージを入力..." onkeypress="handleKeyPress(event)">
+          <button onclick="sendMessage()">送信</button>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- パスワード一覧モーダル -->
-  <div id="pass-modal" class="modal-overlay">
-    <div class="modal-box">
-      <h3>🔑 ユーザー・パスワード一覧</h3>
-      <div id="pass-list"></div>
-      <button onclick="closeModal('pass-modal')" style="margin-top: 15px; padding: 6px 12px; cursor: pointer;">閉じる</button>
+  <!-- 管理者用モーダル -->
+  <div id="admin-modal" class="modal">
+    <div class="modal-content">
+      <h3>👑 管理者パネル</h3>
+      
+      <h4>ユーザー一覧 & BAN管理</h4>
+      <table class="modal-table">
+        <thead>
+          <tr>
+            <th>ユーザー名</th>
+            <th>ステータス</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="admin-user-table"></tbody>
+      </table>
+
+      <h4>DM監視一覧</h4>
+      <table class="modal-table">
+        <thead>
+          <tr>
+            <th>DMルーム</th>
+            <th>件数</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="admin-dm-table"></tbody>
+      </table>
+
+      <button class="modal-close" onclick="closeAdminModal()">閉じる</button>
     </div>
   </div>
 
-  <!-- DM監視一覧モーダル -->
-  <div id="dm-modal" class="modal-overlay">
-    <div class="modal-box">
-      <h3>🔍 全DM（ダイレクトメッセージ）一覧</h3>
-      <div id="dm-list"></div>
-      <button onclick="closeModal('dm-modal')" style="margin-top: 15px; padding: 6px 12px; cursor: pointer;">閉じる</button>
-    </div>
-  </div>
-
-  <!-- BAN管理モーダル -->
-  <div id="ban-modal" class="modal-overlay">
-    <div class="modal-box">
-      <h3>🚫 ユーザーBAN（アカウント停止）管理</h3>
-      <div id="ban-list"></div>
-      <button onclick="closeModal('ban-modal')" style="margin-top: 15px; padding: 6px 12px; cursor: pointer;">閉じる</button>
-    </div>
-  </div>
-
-  <!-- サイドバー -->
-  <div id="sidebar">
-    <div>
-      <h3>チャンネル</h3>
-      <ul>
-        <li id="room-general" class="active" onclick="switchRoom('general')">
-          <span># general</span>
-          <span class="badge" id="badge-general" style="display: none;">0</span>
-        </li>
-        <li id="room-random" onclick="switchRoom('random')">
-          <span># random</span>
-          <span class="badge" id="badge-random" style="display: none;">0</span>
-        </li>
-      </ul>
-    </div>
-
-    <div>
-      <h3>🟢 オンラインユーザー</h3>
-      <ul id="online-user-list"></ul>
-    </div>
-
-    <div>
-      <h3>⚪ オフラインユーザー</h3>
-      <ul id="offline-user-list"></ul>
-    </div>
-
-    <!-- 開発者専用エリア -->
-    <div id="admin-panel" style="display: none; border-top: 1px solid #4f545c; padding-top: 10px;">
-      <h3 style="color: #ff8787;">🛡️ 開発者メニュー</h3>
-      <button class="admin-btn" onclick="fetchUserPasswords()">🔑 パスワード一覧表示</button>
-      <button class="admin-btn" onclick="fetchDMList()">🔍 DMの閲覧・監視</button>
-      <button class="admin-btn" onclick="openBanManager()">🚫 BAN（ユーザー停止）管理</button>
-    </div>
-  </div>
-
-  <!-- メインエリア -->
-  <div id="main-chat">
-    <div id="chat-header">
-      <span id="chat-title"># general</span>
-      <button id="clear-channel-btn" class="admin-btn" style="display: none; width: auto; background: #e03131;" onclick="clearCurrentChannel()">⚠️ チャンネル投稿全削除</button>
-    </div>
-    <div id="messages"></div>
-    <form id="form" onsubmit="sendMessage(event)">
-      <input id="input" autocomplete="off" placeholder="メッセージを入力..." />
-      <button>送信</button>
-    </form>
-  </div>
-
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io(window.location.origin);
-    
-    let myUsername = "";
-    let isAdminUser = false;
-    let isRegisterMode = false;
-    let currentRoom = "general";
-    
-    let messageHistory = {};
-    const unreadCounts = {};
-    let latestUserList = {};
-    let cachedUsersObj = {};
-    let cachedBannedList = [];
+    const socket = io();
 
+    let isRegisterMode = false;
+    let currentUser = '';
+    let currentUserIsAdmin = false;
+    let currentRoom = 'general';
+
+    let chatHistory = {};
+    let unreadCounts = {};
+    let onlineUserList = {};
+
+    // 認証モード切り替え
     function toggleAuthMode() {
       isRegisterMode = !isRegisterMode;
-      document.getElementById('auth-title').textContent = isRegisterMode ? "新規アカウント登録" : "ログイン";
-      document.getElementById('auth-btn').textContent = isRegisterMode ? "登録して開始" : "ログイン";
-      document.getElementById('toggle-auth-btn').textContent = isRegisterMode ? "すでに登録済みの方（ログイン）" : "アカウントをお持ちでない方（新規登録）";
+      document.getElementById('auth-title').textContent = isRegisterMode ? '新規アカウント登録' : 'ログイン';
+      document.getElementById('auth-submit-btn').textContent = isRegisterMode ? '登録して開始' : 'ログイン';
+      document.getElementById('auth-toggle-btn').textContent = isRegisterMode ? 'ログインはこちら' : '新規登録はこちら';
     }
 
-    function submitAuth() {
-      const u = document.getElementById('auth-username').value.trim();
-      const p = document.getElementById('auth-password').value.trim();
-      if (!u || !p) return alert("ユーザー名とパスワードの両方を入力してください");
+    // 認証送信
+    function handleAuth() {
+      const username = document.getElementById('auth-username').value.trim();
+      const password = document.getElementById('auth-password').value.trim();
 
-      if (isRegisterMode) {
-        socket.emit('register account', { username: u, password: p });
-      } else {
-        socket.emit('login account', { username: u, password: p });
+      if (!username || !password) {
+        return alert('ユーザー名とパスワードを入力してください。');
       }
+
+      const eventName = isRegisterMode ? 'register account' : 'login account';
+      socket.emit(eventName, { username, password });
     }
 
-    socket.on('auth error', (msg) => { alert(msg); });
+    // 認証成功
+    socket.on('auth success', (data) => {
+      currentUser = data.username;
+      currentUserIsAdmin = data.isAdmin;
+
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('app-container').style.display = 'flex';
+      
+      let displayName = currentUser;
+      if (currentUserIsAdmin) displayName += ' 👑';
+      document.getElementById('display-user-name').textContent = displayName;
+
+      if (currentUserIsAdmin) {
+        document.getElementById('admin-panel-btn').style.display = 'block';
+      }
+
+      socket.emit('register user', currentUser);
+    });
+
+    socket.on('auth error', (msg) => {
+      alert(msg);
+    });
 
     socket.on('banned notification', (msg) => {
       alert(msg);
-      window.location.reload();
+      location.reload();
     });
 
-    socket.on('auth success', (data) => {
-      myUsername = data.username;
-      isAdminUser = data.isAdmin;
+    // チャンネルリスト描画
+    socket.on('update channel list', (channels) => {
+      const listEl = document.getElementById('channel-list');
+      listEl.innerHTML = '';
 
-      document.getElementById('login-screen').style.display = 'none';
+      channels.forEach(ch => {
+        const li = document.createElement('li');
+        if (ch === currentRoom) li.classList.add('active');
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = `# ${ch}`;
+        li.appendChild(nameSpan);
 
-      if (isAdminUser) {
-        document.getElementById('admin-panel').style.display = 'block';
-        document.getElementById('clear-channel-btn').style.display = 'block';
+        // 未読バッジ
+        if (unreadCounts[ch]) {
+          const badge = document.createElement('span');
+          badge.className = 'badge';
+          badge.textContent = unreadCounts[ch];
+          li.appendChild(badge);
+        }
+
+        // 管理者用チャンネル削除ボタン（general, random 以外）
+        if (currentUserIsAdmin && ch !== 'general' && ch !== 'random') {
+          const delBtn = document.createElement('button');
+          delBtn.className = 'del-btn';
+          delBtn.textContent = '❌';
+          delBtn.style.marginLeft = '8px';
+          delBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (confirm(`チャンネル「#${ch}」を完全に削除しますか？`)) {
+              socket.emit('delete channel', ch);
+            }
+          };
+          li.appendChild(delBtn);
+        }
+
+        li.onclick = () => switchRoom(ch);
+        listEl.appendChild(li);
+      });
+    });
+
+    // ユーザーリスト & DMリスト描画
+    socket.on('update user list', (users) => {
+      onlineUserList = users;
+      renderUserLists();
+    });
+
+    function renderUserLists() {
+      const dmListEl = document.getElementById('dm-user-list');
+      dmListEl.innerHTML = '';
+
+      for (const [uname, info] of Object.entries(onlineUserList)) {
+        if (uname === currentUser) continue; // 自分はリストから外す
+
+        const li = document.createElement('li');
+        const dmRoom = getDmRoomName(currentUser, uname);
+        if (dmRoom === currentRoom) li.classList.add('active');
+
+        const userContainer = document.createElement('div');
+        userContainer.style.display = 'flex';
+        userContainer.style.alignItems = 'center';
+
+        const dot = document.createElement('span');
+        dot.className = `status-dot ${info.isOnline ? 'online' : 'offline'}`;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = uname;
+
+        userContainer.appendChild(dot);
+        userContainer.appendChild(nameSpan);
+
+        if (uname === 'アルパカ') {
+          const adm = document.createElement('span');
+          adm.className = 'admin-badge';
+          adm.textContent = '開発者';
+          userContainer.appendChild(adm);
+        }
+
+        li.appendChild(userContainer);
+
+        // 未読バッジ
+        if (unreadCounts[dmRoom]) {
+          const badge = document.createElement('span');
+          badge.className = 'badge';
+          badge.textContent = unreadCounts[dmRoom];
+          li.appendChild(badge);
+        }
+
+        li.onclick = () => switchRoom(dmRoom);
+        dmListEl.appendChild(li);
       }
+    }
 
-      socket.emit('register user', myUsername);
-    });
+    // DMルーム名の生成（アルファベット順にソートして固定化）
+    function getDmRoomName(userA, userB) {
+      return [userA, userB].sort().join('_DM_');
+    }
 
+    // 履歴受取
     socket.on('load history', (history) => {
-      messageHistory = history;
+      chatHistory = history;
+
+      // 未読件数の判定
+      for (const [room, msgs] of Object.entries(history)) {
+        if (room !== currentRoom && msgs.length > 0) {
+          unreadCounts[room] = msgs.length;
+        }
+      }
+
       renderMessages();
+      renderUserLists();
     });
 
-    function switchRoom(targetRoom) {
-      currentRoom = targetRoom;
-      socket.emit('join room', currentRoom);
+    // ルーム切り替え
+    function switchRoom(roomName) {
+      currentRoom = roomName;
+      delete unreadCounts[roomName]; // 未読クリア
 
-      if (!messageHistory[currentRoom]) {
-        messageHistory[currentRoom] = [];
-      }
+      socket.emit('join room', roomName);
 
-      unreadCounts[currentRoom] = 0;
-      updateBadgeUI(currentRoom);
-
-      const headerTitle = document.getElementById('chat-title');
-      if (targetRoom.includes("_DM_")) {
-        const usersInDM = targetRoom.split("_DM_");
-        headerTitle.textContent = `💬 DM: ${usersInDM.join(" ↔ ")}`;
+      // チャットタイトルの変更
+      if (roomName.includes('_DM_')) {
+        const members = roomName.split('_DM_');
+        const targetUser = members.find(m => m !== currentUser) || currentUser;
+        document.getElementById('current-room-title').textContent = `@ ${targetUser}`;
       } else {
-        headerTitle.textContent = `# ${targetRoom}`;
+        document.getElementById('current-room-title').textContent = `# ${roomName}`;
       }
 
-      document.querySelectorAll('#sidebar li').forEach(li => li.classList.remove('active'));
-      const activeEl = document.getElementById(`room-${targetRoom}`);
-      if (activeEl) activeEl.classList.add('active');
+      // チャンネルクリアボタン表示判定（管理者の場合のみ）
+      if (currentUserIsAdmin) {
+        document.getElementById('clear-channel-btn').style.display = 'block';
+      } else {
+        document.getElementById('clear-channel-btn').style.display = 'none';
+      }
 
+      // 画面更新
       renderMessages();
+      socket.emit('get channels'); // 最新のチャンネルリスト要求
+      renderUserLists();
     }
 
-    function startDM(targetUser) {
-      if (targetUser === myUsername) return;
-      const dmRoomName = [myUsername, targetUser].sort().join("_DM_");
-      switchRoom(dmRoomName);
+    // 新規チャンネル作成
+    function createNewChannel() {
+      const channelName = prompt("新しいチャンネル名を入力してください:");
+      if (channelName) {
+        socket.emit('create channel', channelName);
+      }
     }
 
-    function sendMessage(e) {
-      e.preventDefault();
-      const input = document.getElementById('input');
+    socket.on('channel error', (msg) => {
+      alert(msg);
+    });
+
+    socket.on('channel deleted', (deletedChannel) => {
+      if (currentRoom === deletedChannel) {
+        alert(`チャンネル #${deletedChannel} が削除されました。general へ移動します。`);
+        switchRoom('general');
+      }
+    });
+
+    // メッセージ送信
+    function sendMessage() {
+      const input = document.getElementById('message-input');
       const text = input.value.trim();
       if (!text) return;
 
       socket.emit('chat message', {
-        text: text,
-        targetRoom: currentRoom
+        targetRoom: currentRoom,
+        text: text
       });
 
       input.value = '';
     }
 
-    function editMessage(msgId, currentText) {
-      const newText = prompt("メッセージを編集:", currentText);
-      if (newText !== null && newText.trim() !== "" && newText !== currentText) {
-        socket.emit('edit message', { id: msgId, newText: newText.trim(), targetRoom: currentRoom });
+    function handleKeyPress(e) {
+      if (e.key === 'Enter') sendMessage();
+    }
+
+    // メッセージ受信
+    socket.on('chat message', (msgObj) => {
+      if (!chatHistory[msgObj.targetRoom]) {
+        chatHistory[msgObj.targetRoom] = [];
+      }
+      chatHistory[msgObj.targetRoom].push(msgObj);
+
+      if (msgObj.targetRoom === currentRoom) {
+        renderMessages();
+      } else {
+        // 未読件数加算
+        unreadCounts[msgObj.targetRoom] = (unreadCounts[msgObj.targetRoom] || 0) + 1;
+        renderUserLists();
+        socket.emit('get channels');
+      }
+    });
+
+    // メッセージ描画
+    function renderMessages() {
+      const container = document.getElementById('messages-container');
+      container.innerHTML = '';
+
+      const msgs = chatHistory[currentRoom] || [];
+      msgs.forEach(msg => {
+        const item = document.createElement('div');
+        item.className = 'message-item';
+
+        const header = document.createElement('div');
+        header.className = 'message-header';
+
+        const userSpan = document.createElement('span');
+        userSpan.className = 'message-user';
+        userSpan.textContent = msg.user;
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'message-time';
+        timeSpan.textContent = msg.time;
+
+        header.appendChild(userSpan);
+        header.appendChild(timeSpan);
+
+        const textDiv = document.createElement('div');
+        textDiv.className = 'message-text';
+        textDiv.textContent = msg.text;
+
+        if (msg.isEdited) {
+          const editTag = document.createElement('span');
+          editTag.className = 'edited-tag';
+          editTag.textContent = '(編集済み)';
+          textDiv.appendChild(editTag);
+        }
+
+        item.appendChild(header);
+        item.appendChild(textDiv);
+
+        // 自分または管理者の場合に操作ボタンを追加
+        if (msg.user === currentUser || currentUserIsAdmin) {
+          const actions = document.createElement('div');
+          actions.className = 'msg-actions';
+
+          if (msg.user === currentUser) {
+            const editBtn = document.createElement('button');
+            editBtn.className = 'msg-btn';
+            editBtn.textContent = '編集';
+            editBtn.onclick = () => editMessage(msg.id, msg.text);
+            actions.appendChild(editBtn);
+          }
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'msg-btn';
+          delBtn.textContent = '削除';
+          delBtn.onclick = () => deleteMessage(msg.id);
+          actions.appendChild(delBtn);
+
+          item.appendChild(actions);
+        }
+
+        container.appendChild(item);
+      });
+
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // メッセージ編集
+    function editMessage(id, oldText) {
+      const newText = prompt("メッセージを編集:", oldText);
+      if (newText && newText !== oldText) {
+        socket.emit('edit message', { id, newText, targetRoom: currentRoom });
       }
     }
 
-    function deleteMessage(msgId) {
+    socket.on('edit message', (data) => {
+      const history = chatHistory[data.targetRoom];
+      if (history) {
+        const msg = history.find(m => m.id === data.id);
+        if (msg) {
+          msg.text = data.newText;
+          msg.isEdited = true;
+          if (data.targetRoom === currentRoom) renderMessages();
+        }
+      }
+    });
+
+    // メッセージ削除
+    function deleteMessage(id) {
       if (confirm("このメッセージを削除しますか？")) {
-        socket.emit('delete message', { id: msgId, targetRoom: currentRoom });
+        socket.emit('delete message', { id, targetRoom: currentRoom });
       }
     }
 
+    socket.on('delete message', (data) => {
+      const history = chatHistory[data.targetRoom];
+      if (history) {
+        chatHistory[data.targetRoom] = history.filter(m => m.id !== data.id);
+        if (data.targetRoom === currentRoom) renderMessages();
+      }
+    });
+
+    // チャンネル内全消去
     function clearCurrentChannel() {
-      if (confirm(`本当にチャンネル [${currentRoom}] の投稿をすべて削除しますか？`)) {
+      if (confirm(`「# ${currentRoom}」のすべての投稿を削除しますか？`)) {
         socket.emit('clear channel', currentRoom);
       }
     }
 
-    function closeModal(modalId) {
-      document.getElementById(modalId).style.display = 'none';
-    }
-
-    /* パスワード一覧 */
-    function fetchUserPasswords() {
-      socket.emit('get admin user list');
-    }
-
-    socket.on('admin user list result', (data) => {
-      cachedUsersObj = data.users;
-      cachedBannedList = data.banned;
-      
-      const listDiv = document.getElementById('pass-list');
-      listDiv.innerHTML = '';
-      for (const [u, p] of Object.entries(cachedUsersObj)) {
-        const isBanned = cachedBannedList.includes(u);
-        listDiv.innerHTML += `
-          <div class="list-item">
-            <div><strong>${escapeHtml(u)}</strong> ${isBanned ? '<span style="color:red;">(BAN済み)</span>' : ''}</div>
-            <div style="font-family: monospace; background:#f1f3f5; padding:2px 6px; border-radius:3px;">${escapeHtml(p)}</div>
-          </div>`;
-      }
-      document.getElementById('pass-modal').style.display = 'flex';
+    socket.on('clear channel', (roomName) => {
+      chatHistory[roomName] = [];
+      if (roomName === currentRoom) renderMessages();
     });
 
-    /* DM閲覧・監視 */
-    function fetchDMList() {
+    /* --- 管理者機能 --- */
+    function openAdminModal() {
+      document.getElementById('admin-modal').style.display = 'flex';
+      socket.emit('get admin user list');
       socket.emit('get admin dm list');
     }
 
+    function closeAdminModal() {
+      document.getElementById('admin-modal').style.display = 'none';
+    }
+
+    socket.on('admin user list result', (data) => {
+      const tbody = document.getElementById('admin-user-table');
+      tbody.innerHTML = '';
+
+      for (const uname of Object.keys(data.users)) {
+        const tr = document.createElement('tr');
+
+        const tdName = document.createElement('td');
+        tdName.textContent = uname;
+
+        const tdBan = document.createElement('td');
+        const isBanned = data.banned.includes(uname);
+        tdBan.textContent = isBanned ? 'BAN中' : '正常';
+        tdBan.style.color = isBanned ? '#ff4757' : '#2ed573';
+
+        const tdAction = document.createElement('td');
+        if (uname !== 'アルパカ') {
+          const btn = document.createElement('button');
+          btn.className = 'del-btn';
+          btn.textContent = isBanned ? 'BAN解除' : 'BANする';
+          btn.style.backgroundColor = isBanned ? '#2ed573' : '#ff4757';
+          btn.onclick = () => {
+            if (isBanned) {
+              socket.emit('admin unban user', uname);
+            } else {
+              if (confirm(`ユーザー「${uname}」をBANしますか？`)) {
+                socket.emit('admin ban user', uname);
+              }
+            }
+          };
+          tdAction.appendChild(btn);
+        }
+
+        tr.appendChild(tdName);
+        tr.appendChild(tdBan);
+        tr.appendChild(tdAction);
+        tbody.appendChild(tr);
+      }
+    });
+
+    socket.on('admin ban success', () => {
+      socket.emit('get admin user list');
+    });
+
     socket.on('admin dm list result', (dmRooms) => {
-      const listDiv = document.getElementById('dm-list');
-      listDiv.innerHTML = '';
-      if (dmRooms.length === 0) {
-        listDiv.innerHTML = '<div style="padding: 10px; color: #888;">現在進行中のDMはありません。</div>';
-      } else {
-        dmRooms.forEach(room => {
-          listDiv.innerHTML += `
-            <div class="list-item">
-              <div>
-                <strong>💬 ${escapeHtml(room.members.join(' ↔ '))}</strong>
-                <div style="font-size: 11px; color: #666;">送信件数: ${room.msgCount}件</div>
-              </div>
-              <button class="btn-success" onclick="observeDM('${room.roomName}')">監視・開く</button>
-            </div>`;
-        });
-      }
-      document.getElementById('dm-modal').style.display = 'flex';
-    });
+      const tbody = document.getElementById('admin-dm-table');
+      tbody.innerHTML = '';
 
-    function observeDM(roomName) {
-      closeModal('dm-modal');
-      socket.emit('admin observe dm', roomName);
-      switchRoom(roomName);
-    }
+      dmRooms.forEach(room => {
+        const tr = document.createElement('tr');
 
-    /* BAN管理 */
-    function openBanManager() {
-      socket.emit('get admin user list'); // 最新情報を取得
-      setTimeout(() => {
-        renderBanManagerUI();
-        document.getElementById('ban-modal').style.display = 'flex';
-      }, 200);
-    }
+        const tdName = document.createElement('td');
+        tdName.textContent = room.members.join(' ↔ ');
 
-    function renderBanManagerUI() {
-      const listDiv = document.getElementById('ban-list');
-      listDiv.innerHTML = '';
+        const tdCount = document.createElement('td');
+        tdCount.textContent = `${room.msgCount} 件`;
 
-      for (const u of Object.keys(cachedUsersObj)) {
-        if (u === 'アルパカ') continue; // 自分は表示しない
-        const isBanned = cachedBannedList.includes(u);
-        listDiv.innerHTML += `
-          <div class="list-item">
-            <div>
-              <strong>${escapeHtml(u)}</strong>
-              ${isBanned ? '<span style="color:red; font-size:12px; margin-left:8px;">[停止中]</span>' : ''}
-            </div>
-            ${isBanned ? `
-              <button class="btn-success" onclick="unbanUser('${escapeHtml(u)}')">BAN解除</button>
-            ` : `
-              <button class="btn-danger" onclick="banUser('${escapeHtml(u)}')">BAN（アカウント停止）</button>
-            `}
-          </div>`;
-      }
-    }
+        const tdAction = document.createElement('td');
+        const btn = document.createElement('button');
+        btn.className = 'msg-btn';
+        btn.textContent = '監視・開く';
+        btn.onclick = () => {
+          closeAdminModal();
+          socket.emit('admin observe dm', room.roomName);
+          switchRoom(room.roomName);
+        };
+        tdAction.appendChild(btn);
 
-    function banUser(targetUser) {
-      if (confirm(`本当に [${targetUser}] をBANしますか？\n（オンラインの場合は即座に切断されます）`)) {
-        socket.emit('admin ban user', targetUser);
-      }
-    }
-
-    function unbanUser(targetUser) {
-      if (confirm(`[${targetUser}] のBANを解除しますか？`)) {
-        socket.emit('admin unban user', targetUser);
-      }
-    }
-
-    socket.on('admin ban success', (data) => {
-      alert(`ユーザー [${data.username}] を${data.isBanned ? 'BAN' : 'BAN解除'}しました。`);
-      closeModal('ban-modal');
-    });
-
-    socket.on('chat message', (data) => {
-      const room = data.targetRoom;
-      if (!messageHistory[room]) messageHistory[room] = [];
-      messageHistory[room].push(data);
-
-      if (room === currentRoom) {
-        renderMessages();
-      } else {
-        unreadCounts[room] = (unreadCounts[room] || 0) + 1;
-        updateBadgeUI(room);
-      }
-    });
-
-    socket.on('edit message', (data) => {
-      const room = data.targetRoom;
-      if (messageHistory[room]) {
-        const msg = messageHistory[room].find(m => m.id === data.id);
-        if (msg) {
-          msg.text = data.newText;
-          msg.isEdited = true;
-        }
-      }
-      if (room === currentRoom) renderMessages();
-    });
-
-    socket.on('delete message', (data) => {
-      const room = data.targetRoom;
-      if (messageHistory[room]) {
-        messageHistory[room] = messageHistory[room].filter(m => m.id !== data.id);
-      }
-      if (room === currentRoom) renderMessages();
-    });
-
-    socket.on('clear channel', (roomName) => {
-      messageHistory[roomName] = [];
-      if (currentRoom === roomName) renderMessages();
-    });
-
-    function updateBadgeUI(room) {
-      const badgeEl = document.getElementById(`badge-${room}`);
-      if (!badgeEl) return;
-      const count = unreadCounts[room] || 0;
-      if (count > 0) {
-        badgeEl.textContent = count;
-        badgeEl.style.display = 'inline-block';
-      } else {
-        badgeEl.style.display = 'none';
-      }
-    }
-
-    function renderMessages() {
-      const messagesContainer = document.getElementById('messages');
-      messagesContainer.innerHTML = '';
-
-      const history = messageHistory[currentRoom] || [];
-      history.forEach(msg => {
-        const div = document.createElement('div');
-        const isMe = (msg.user === myUsername);
-        div.className = `message ${isMe ? 'my-msg' : ''}`;
-        
-        const canManage = isMe || isAdminUser;
-
-        div.innerHTML = `
-          <div class="sender">${isMe ? 'あなた' : escapeHtml(msg.user)}</div>
-          <div class="text">${escapeHtml(msg.text)}</div>
-          <div class="msg-footer">
-            ${canManage ? `
-              <button class="action-btn" onclick="editMessage('${msg.id}', '${escapeHtml(msg.text)}')">編集</button>
-              <button class="action-btn" onclick="deleteMessage('${msg.id}')">削除</button>
-            ` : ''}
-            ${msg.isEdited ? '<span class="edited-mark">(編集済み)</span>' : ''}
-            <span class="msg-time">${msg.time || ''}</span>
-          </div>
-        `;
-        messagesContainer.appendChild(div);
+        tr.appendChild(tdName);
+        tr.appendChild(tdCount);
+        tr.appendChild(tdAction);
+        tbody.appendChild(tr);
       });
-
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
-    function formatLastSeen(lastSeenTimestamp) {
-      if (!lastSeenTimestamp) return 'オフライン';
-      const now = Date.now();
-      const diffMs = now - lastSeenTimestamp;
-      const diffMinutes = Math.floor(diffMs / (1000 * 60));
-
-      if (diffMinutes < 1) {
-        return 'たった今オフライン';
-      } else if (diffMinutes < 60) {
-        return `${diffMinutes}分前`;
-      } else {
-        const diffHours = Math.floor(diffMinutes / 60);
-        if (diffHours < 24) {
-          return `${diffHours}時間前`;
-        } else {
-          const diffDays = Math.floor(diffHours / 24);
-          return `${diffDays}日前`;
-        }
-      }
-    }
-
-    socket.on('update user list', (users) => {
-      latestUserList = users;
-      renderUserLists();
     });
-
-    function renderUserLists() {
-      const onlineList = document.getElementById('online-user-list');
-      const offlineList = document.getElementById('offline-user-list');
-      
-      onlineList.innerHTML = '';
-      offlineList.innerHTML = '';
-
-      for (const [username, info] of Object.entries(latestUserList)) {
-        if (username === myUsername) continue;
-
-        const dmRoomName = [myUsername, username].sort().join("_DM_");
-        const li = document.createElement('li');
-        li.id = `room-${dmRoomName}`;
-        li.onclick = () => startDM(username);
-
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'user-info';
-
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'user-name';
-        nameSpan.textContent = username;
-        infoDiv.appendChild(nameSpan);
-
-        if (!info.isOnline) {
-          const timeSpan = document.createElement('span');
-          timeSpan.className = 'last-seen';
-          timeSpan.textContent = formatLastSeen(info.lastSeen);
-          infoDiv.appendChild(timeSpan);
-        }
-
-        const badgeSpan = document.createElement('span');
-        badgeSpan.className = 'badge';
-        badgeSpan.id = `badge-${dmRoomName}`;
-        
-        const count = unreadCounts[dmRoomName] || 0;
-        badgeSpan.textContent = count;
-        if (count === 0) badgeSpan.style.display = 'none';
-
-        li.appendChild(infoDiv);
-        li.appendChild(badgeSpan);
-
-        if (currentRoom === dmRoomName) {
-          li.classList.add('active');
-        }
-
-        if (info.isOnline) {
-          onlineList.appendChild(li);
-        } else {
-          offlineList.appendChild(li);
-        }
-      }
-    }
-
-    setInterval(() => {
-      if (Object.keys(latestUserList).length > 0) {
-        renderUserLists();
-      }
-    }, 60000);
-
-    function escapeHtml(str) {
-      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, "&#39;");
-    }
   </script>
 </body>
 </html>
