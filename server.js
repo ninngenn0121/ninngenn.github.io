@@ -12,6 +12,7 @@ const io = new Server(server);
 const DATA_DIR = path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
+const STATUS_FILE = path.join(DATA_DIR, 'status.json');
 
 // 保存用フォルダがない場合は作成
 if (!fs.existsSync(DATA_DIR)) {
@@ -49,13 +50,30 @@ let chatHistory = loadData(MESSAGES_FILE, {
   "random": []
 });
 
-// オンラインユーザー管理 { socketId: username }
-const onlineUsers = {};
+// ユーザーのアクティビティ状態 { username: { isOnline: boolean, lastSeen: timestamp } }
+let userStatus = loadData(STATUS_FILE, {});
+
+// オンラインソケットの管理 { socketId: username }
+const onlineSockets = {};
 
 // index.html の提供
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
+
+// ユーザーリストのブロードキャスト
+function broadcastUserList() {
+  const list = {};
+  for (const username of Object.keys(registeredUsers)) {
+    const isOnline = Object.values(onlineSockets).includes(username);
+    const statusInfo = userStatus[username] || { isOnline: false, lastSeen: Date.now() };
+    list[username] = {
+      isOnline: isOnline,
+      lastSeen: isOnline ? Date.now() : (statusInfo.lastSeen || Date.now())
+    };
+  }
+  io.emit('update user list', list);
+}
 
 io.on('connection', (socket) => {
   console.log('ユーザー接続:', socket.id);
@@ -67,6 +85,9 @@ io.on('connection', (socket) => {
     }
     registeredUsers[username] = password;
     saveData(USERS_FILE, registeredUsers);
+
+    userStatus[username] = { isOnline: true, lastSeen: Date.now() };
+    saveData(STATUS_FILE, userStatus);
 
     socket.emit('auth success', { username, isAdmin: (username === 'アルパカ' && password === 'kupaa0121') });
   });
@@ -92,11 +113,15 @@ io.on('connection', (socket) => {
 
   // オンラインユーザー登録
   socket.on('register user', (username) => {
-    onlineUsers[socket.id] = username;
+    onlineSockets[socket.id] = username;
+    
+    userStatus[username] = { isOnline: true, lastSeen: Date.now() };
+    saveData(STATUS_FILE, userStatus);
+
     socket.join('general');
     socket.join('random');
     
-    io.emit('update user list', onlineUsers);
+    broadcastUserList();
     socket.emit('load history', chatHistory);
   });
 
@@ -117,7 +142,7 @@ io.on('connection', (socket) => {
 
     const msgObj = {
       id: Date.now() + Math.random().toString(36).substr(2, 9),
-      user: onlineUsers[socket.id] || '匿名',
+      user: onlineSockets[socket.id] || '匿名',
       text: data.text,
       targetRoom: data.targetRoom,
       time: japanTime
@@ -184,8 +209,19 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    delete onlineUsers[socket.id];
-    io.emit('update user list', onlineUsers);
+    const username = onlineSockets[socket.id];
+    delete onlineSockets[socket.id];
+
+    if (username) {
+      // 同じユーザーが他タブで接続していなければオフライン化
+      const isStillOnline = Object.values(onlineSockets).includes(username);
+      if (!isStillOnline) {
+        userStatus[username] = { isOnline: false, lastSeen: Date.now() };
+        saveData(STATUS_FILE, userStatus);
+      }
+    }
+
+    broadcastUserList();
   });
 });
 
