@@ -21,21 +21,23 @@
     #sidebar { width: 270px; background: #2f3136; color: white; padding: 15px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
     #main-chat { flex: 1; display: flex; flex-direction: column; background: white; }
     
-    h3 { font-size: 13px; text-transform: uppercase; color: #8e9297; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    h3 { font-size: 12px; text-transform: uppercase; color: #8e9297; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
     ul { list-style: none; }
     li { 
-      padding: 8px 12px; border-radius: 4px; cursor: pointer; margin-bottom: 4px; color: #dcddde; 
-      display: flex; justify-content: space-between; align-items: center; font-size: 14px;
+      padding: 8px 10px; border-radius: 4px; cursor: pointer; margin-bottom: 4px; color: #dcddde; 
+      display: flex; justify-content: space-between; align-items: center; font-size: 13px;
     }
     li:hover, li.active { background: #393c43; color: white; }
     
+    .user-info { display: flex; flex-direction: column; overflow: hidden; }
+    .user-name { font-weight: 500; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+    .last-seen { font-size: 10px; color: #96989d; }
+
     .badge {
       background-color: #f23f43; color: white; font-size: 11px; font-weight: bold;
       padding: 2px 6px; border-radius: 10px; min-width: 18px; text-align: center; display: inline-block;
     }
 
-    /* 開発者バッジ・ボタン */
-    .admin-tag { background: #e03131; color: white; font-size: 10px; padding: 2px 5px; border-radius: 3px; margin-left: 5px; }
     .admin-btn { background: #d9480f; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
     .admin-btn:hover { background: #c2255c; }
 
@@ -65,7 +67,6 @@
     #input { flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 20px; outline: none; font-size: 16px; }
     #form button { padding: 10px 20px; background: #0084ff; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 16px; }
 
-    /* モーダルダイアログ (アカウント情報用) */
     #pass-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 200; }
     .pass-box { background: white; padding: 20px; border-radius: 8px; max-width: 400px; width: 90%; max-height: 80vh; overflow-y: auto; }
   </style>
@@ -109,11 +110,16 @@
     </div>
 
     <div>
-      <h3>オンラインユーザー (DM)</h3>
-      <ul id="user-list"></ul>
+      <h3>🟢 オンラインユーザー</h3>
+      <ul id="online-user-list"></ul>
     </div>
 
-    <!-- 🌟 開発者専用エリア -->
+    <div>
+      <h3>⚪ オフラインユーザー</h3>
+      <ul id="offline-user-list"></ul>
+    </div>
+
+    <!-- 開発者専用エリア -->
     <div id="admin-panel" style="display: none; border-top: 1px solid #4f545c; padding-top: 10px;">
       <h3 style="color: #ff8787;">🛡️ 開発者メニュー</h3>
       <button class="admin-btn" style="width: 100%; margin-bottom: 8px;" onclick="fetchUserPasswords()">🔑 パスワード一覧表示</button>
@@ -147,8 +153,8 @@
     
     let messageHistory = {};
     const unreadCounts = {};
+    let latestUserList = {};
 
-    // 認証モード切替（ログイン ⇄ 新規登録）
     function toggleAuthMode() {
       isRegisterMode = !isRegisterMode;
       document.getElementById('auth-title').textContent = isRegisterMode ? "新規アカウント登録" : "ログイン";
@@ -156,7 +162,6 @@
       document.getElementById('toggle-auth-btn').textContent = isRegisterMode ? "すでに登録済みの方（ログイン）" : "アカウントをお持ちでない方（新規登録）";
     }
 
-    // ログイン / 登録送信
     function submitAuth() {
       const u = document.getElementById('auth-username').value.trim();
       const p = document.getElementById('auth-password').value.trim();
@@ -169,17 +174,14 @@
       }
     }
 
-    // 認証失敗
     socket.on('auth error', (msg) => { alert(msg); });
 
-    // 認証成功
     socket.on('auth success', (data) => {
       myUsername = data.username;
       isAdminUser = data.isAdmin;
 
       document.getElementById('login-screen').style.display = 'none';
 
-      // 開発者モードの設定
       if (isAdminUser) {
         document.getElementById('admin-panel').style.display = 'block';
         document.getElementById('clear-channel-btn').style.display = 'block';
@@ -188,7 +190,6 @@
       socket.emit('register user', myUsername);
     });
 
-    // 履歴読み込み
     socket.on('load history', (history) => {
       messageHistory = history;
       renderMessages();
@@ -245,7 +246,6 @@
       input.value = '';
     }
 
-    // 編集・削除アクション
     function editMessage(msgId, currentText) {
       const newText = prompt("メッセージを編集:", currentText);
       if (newText !== null && newText.trim() !== "" && newText !== currentText) {
@@ -259,14 +259,12 @@
       }
     }
 
-    // チャンネル全削除 (開発者専用)
     function clearCurrentChannel() {
       if (confirm(`本当にチャンネル [${currentRoom}] の投稿をすべて削除しますか？`)) {
         socket.emit('clear channel', currentRoom);
       }
     }
 
-    // パスワード一覧取得 (開発者専用)
     function fetchUserPasswords() {
       socket.emit('get admin user list');
     }
@@ -280,7 +278,6 @@
       document.getElementById('pass-modal').style.display = 'flex';
     });
 
-    // 受信処理
     socket.on('chat message', (data) => {
       const room = data.targetRoom;
       if (!messageHistory[room]) messageHistory[room] = [];
@@ -341,7 +338,6 @@
         const isMe = (msg.user === myUsername);
         div.className = `message ${isMe ? 'my-msg' : ''}`;
         
-        // 開発者または自分自身の投稿なら「編集」「削除」権限を与える
         const canManage = isMe || isAdminUser;
 
         div.innerHTML = `
@@ -362,20 +358,63 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    socket.on('update user list', (users) => {
-      const userList = document.getElementById('user-list');
-      userList.innerHTML = '';
+    // オフライン経過時間の計算関数（分単位・時間単位）
+    function formatLastSeen(lastSeenTimestamp) {
+      if (!lastSeenTimestamp) return 'オフライン';
+      const now = Date.now();
+      const diffMs = now - lastSeenTimestamp;
+      const diffMinutes = Math.floor(diffMs / (1000 * 60));
 
-      Object.values(users).forEach(username => {
-        if (username === myUsername) return;
+      if (diffMinutes < 1) {
+        return 'たった今オフライン';
+      } else if (diffMinutes < 60) {
+        return `${diffMinutes}分前`;
+      } else {
+        const diffHours = Math.floor(diffMinutes / 60);
+        if (diffHours < 24) {
+          return `${diffHours}時間前`;
+        } else {
+          const diffDays = Math.floor(diffHours / 24);
+          return `${diffDays}日前`;
+        }
+      }
+    }
+
+    // ユーザーリスト更新
+    socket.on('update user list', (users) => {
+      latestUserList = users;
+      renderUserLists();
+    });
+
+    function renderUserLists() {
+      const onlineList = document.getElementById('online-user-list');
+      const offlineList = document.getElementById('offline-user-list');
+      
+      onlineList.innerHTML = '';
+      offlineList.innerHTML = '';
+
+      for (const [username, info] of Object.entries(latestUserList)) {
+        if (username === myUsername) continue; // 自分自身はリストに表示しない
 
         const dmRoomName = [myUsername, username].sort().join("_DM_");
         const li = document.createElement('li');
         li.id = `room-${dmRoomName}`;
         li.onclick = () => startDM(username);
 
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'user-info';
+
         const nameSpan = document.createElement('span');
-        nameSpan.textContent = `👤 ${username}`;
+        nameSpan.className = 'user-name';
+        nameSpan.textContent = username;
+        infoDiv.appendChild(nameSpan);
+
+        if (!info.isOnline) {
+          const timeSpan = document.createElement('span');
+          timeSpan.className = 'last-seen';
+          timeSpan.textContent = formatLastSeen(info.lastSeen);
+          infoDiv.appendChild(timeSpan);
+        }
 
         const badgeSpan = document.createElement('span');
         badgeSpan.className = 'badge';
@@ -385,15 +424,27 @@
         badgeSpan.textContent = count;
         if (count === 0) badgeSpan.style.display = 'none';
 
-        li.appendChild(nameSpan);
+        li.appendChild(infoDiv);
         li.appendChild(badgeSpan);
 
         if (currentRoom === dmRoomName) {
           li.classList.add('active');
         }
-        userList.appendChild(li);
-      });
-    });
+
+        if (info.isOnline) {
+          onlineList.appendChild(li);
+        } else {
+          offlineList.appendChild(li);
+        }
+      }
+    }
+
+    // 1分ごとにオフライン表示（「◯分前」）を自動更新
+    setInterval(() => {
+      if (Object.keys(latestUserList).length > 0) {
+        renderUserLists();
+      }
+    }, 60000);
 
     function escapeHtml(str) {
       return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, "&#39;");
