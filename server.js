@@ -11,13 +11,12 @@ const io = new Server(server, {
 
 app.use(express.static(__dirname));
 
-// 初期管理者アカウント
+// 初期アカウント
 const users = {
   'アルパカ': { password: 'kupaa0121', role: 'admin', lastSeen: null }
 };
 
-// カスタム権限（ロール）定義
-// admin は全権限所持
+// カスタム権限（ロール）
 let roles = {
   'admin': {
     name: '開発者/管理者',
@@ -30,7 +29,8 @@ let roles = {
       deleteChannel: true,
       clearChannel: true,
       pinMessage: true,
-      pinChannel: true
+      pinChannel: true,
+      manageCategories: true
     }
   }
 };
@@ -40,7 +40,15 @@ let bannedIPs = [];
 let userIPs = {};
 let profiles = {};
 
-let channels = ['general', 'random'];
+// ジャンル（カテゴリ）管理
+let categories = ['基本', '雑談', 'ゲーム'];
+
+// チャンネル構造 { name: 'general', category: '基本' }
+let channels = [
+  { name: 'general', category: '基本' },
+  { name: 'random', category: '雑談' }
+];
+
 let pinnedChannels = [];
 let chatHistory = {
   'general': [],
@@ -52,7 +60,7 @@ function getClientIp(socket) {
   return forwarded ? forwarded.split(',')[0].trim() : socket.handshake.address;
 }
 
-// ユーザーのパーミッション確認用
+// 権限確認関数
 function hasPermission(username, permKey) {
   if (username === 'アルパカ') return true;
   const u = users[username];
@@ -83,18 +91,11 @@ function getUserList() {
   return userList;
 }
 
-function getSortedChannels() {
-  const normalChannels = channels
-    .filter(c => !pinnedChannels.includes(c))
-    .sort((a, b) => a.localeCompare(b, 'ja'));
-
-  const pinnedSorted = pinnedChannels
-    .slice()
-    .sort((a, b) => a.localeCompare(b, 'ja'));
-
+function getSortedChannelsData() {
   return {
-    pinned: pinnedSorted,
-    normal: normalChannels
+    categories: categories,
+    channels: channels,
+    pinned: pinnedChannels
   };
 }
 
@@ -113,7 +114,6 @@ function getFormattedTime() {
 io.on('connection', (socket) => {
   const clientIp = getClientIp(socket);
 
-  // ログイン情報送信ヘルパー
   const sendAuthSuccess = (username) => {
     socket.username = username;
     const userRole = users[username].role || null;
@@ -133,11 +133,7 @@ io.on('connection', (socket) => {
   socket.on('register account', (data) => {
     const { username, password } = data;
     if (!username || !password) return socket.emit('auth error', 'ユーザー名とパスワードを入力してください。');
-    
-    if (bannedIPs.includes(clientIp)) {
-      return socket.emit('auth error', 'このネットワーク（IPアドレス）からのアクセスは制限されています。');
-    }
-
+    if (bannedIPs.includes(clientIp)) return socket.emit('auth error', 'このネットワークからのアクセスは制限されています。');
     if (users[username]) return socket.emit('auth error', 'そのユーザー名は既に使用されています。');
 
     users[username] = { password: password, role: null, lastSeen: null };
@@ -148,15 +144,8 @@ io.on('connection', (socket) => {
   // 2. ログイン
   socket.on('login account', (data) => {
     const { username, password } = data;
-    
-    if (bannedIPs.includes(clientIp)) {
-      return socket.emit('auth error', 'このネットワーク（IPアドレス）からのアクセスは制限されています。');
-    }
-
-    if (bannedUsers.includes(username)) {
-      return socket.emit('auth error', 'このアカウントはBANされています。');
-    }
-
+    if (bannedIPs.includes(clientIp)) return socket.emit('auth error', 'このネットワークからのアクセスは制限されています。');
+    if (bannedUsers.includes(username)) return socket.emit('auth error', 'このアカウントはBANされています。');
     if (!users[username] || users[username].password !== password) {
       return socket.emit('auth error', 'ユーザー名またはパスワードが正しくありません。');
     }
@@ -165,12 +154,12 @@ io.on('connection', (socket) => {
     sendAuthSuccess(username);
   });
 
-  // 3. チャット初期接続
+  // 3. チャット初期化
   socket.on('register user', (username) => {
     socket.username = username;
     socket.join('general');
 
-    socket.emit('update channel list', getSortedChannels());
+    socket.emit('update channel structure', getSortedChannelsData());
     socket.emit('load history', chatHistory);
     io.emit('update user list', getUserList());
   });
@@ -189,7 +178,6 @@ io.on('connection', (socket) => {
     if (!chatHistory[targetRoom]) chatHistory[targetRoom] = [];
 
     const timeStr = getFormattedTime();
-
     const newMsg = {
       id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
       user: socket.username || '匿名',
@@ -215,9 +203,7 @@ io.on('connection', (socket) => {
       const msg = history.find(m => m.id === id);
       if (msg) {
         const canEdit = (msg.user === socket.username && !msg.isPinned) || hasPermission(socket.username, 'editMessage');
-        if (!canEdit) {
-          return socket.emit('chat error', '編集権限がありません。');
-        }
+        if (!canEdit) return socket.emit('chat error', '編集権限がありません。');
         msg.text = newText;
         msg.isEdited = true;
         io.to(targetRoom).emit('edit message', { id, newText, targetRoom });
@@ -234,16 +220,14 @@ io.on('connection', (socket) => {
       if (msg) {
         const isSelf = (msg.user === socket.username && !msg.isPinned);
         const canDelete = isSelf || hasPermission(socket.username, 'deleteMessage');
-        if (!canDelete) {
-          return socket.emit('chat error', '削除権限がありません。');
-        }
+        if (!canDelete) return socket.emit('chat error', '削除権限がありません。');
         chatHistory[targetRoom] = history.filter(m => m.id !== id);
         io.to(targetRoom).emit('delete message', { id, targetRoom });
       }
     }
   });
 
-  // 8. メッセージ固定/解除
+  // 8. ピン留め
   socket.on('toggle pin message', (data) => {
     if (!hasPermission(socket.username, 'pinMessage')) return;
     const { id, targetRoom } = data;
@@ -257,7 +241,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 9. チャンネル全消去
+  // 9. 全消去
   socket.on('clear channel', (roomName) => {
     if (hasPermission(socket.username, 'clearChannel')) {
       chatHistory[roomName] = [];
@@ -265,31 +249,44 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 10. チャンネル作成
-  socket.on('create channel', (channelName) => {
+  // ★ 10. ジャンル（カテゴリ）の追加
+  socket.on('create category', (catName) => {
+    if (!hasPermission(socket.username, 'createChannel') && !hasPermission(socket.username, 'manageCategories')) {
+      return socket.emit('channel error', 'ジャンル作成権限がありません。');
+    }
+    if (!catName || categories.includes(catName)) {
+      return socket.emit('channel error', '無効か、既に存在するジャンル名です。');
+    }
+    categories.push(catName);
+    io.emit('update channel structure', getSortedChannelsData());
+  });
+
+  // 11. チャンネル作成（ジャンル指定対応）
+  socket.on('create channel', (data) => {
+    const { name, category } = typeof data === 'string' ? { name: data, category: '基本' } : data;
     if (!hasPermission(socket.username, 'createChannel')) {
       return socket.emit('channel error', 'チャンネル作成権限がありません。');
     }
-    if (channels.includes(channelName)) {
+    if (channels.some(c => c.name === name)) {
       return socket.emit('channel error', 'そのチャンネル名は既に存在します。');
     }
-    channels.push(channelName);
-    chatHistory[channelName] = [];
-    io.emit('update channel list', getSortedChannels());
+    channels.push({ name, category: category || '基本' });
+    chatHistory[name] = [];
+    io.emit('update channel structure', getSortedChannelsData());
   });
 
-  // 11. チャンネル削除
+  // 12. チャンネル削除
   socket.on('delete channel', (channelName) => {
     if (hasPermission(socket.username, 'deleteChannel')) {
-      channels = channels.filter(c => c !== channelName);
+      channels = channels.filter(c => c.name !== channelName);
       pinnedChannels = pinnedChannels.filter(c => c !== channelName);
       delete chatHistory[channelName];
-      io.emit('update channel list', getSortedChannels());
+      io.emit('update channel structure', getSortedChannelsData());
       io.emit('channel deleted', channelName);
     }
   });
 
-  // 12. チャンネル固定/解除
+  // 13. チャンネル固定/解除
   socket.on('toggle pin channel', (channelName) => {
     if (hasPermission(socket.username, 'pinChannel')) {
       if (pinnedChannels.includes(channelName)) {
@@ -297,35 +294,11 @@ io.on('connection', (socket) => {
       } else {
         pinnedChannels.push(channelName);
       }
-      io.emit('update channel list', getSortedChannels());
+      io.emit('update channel structure', getSortedChannelsData());
     }
   });
 
-  // 13. グループDM作成
-  socket.on('create group dm', (members) => {
-    members.sort();
-    const groupRoom = '_GROUP_DM_' + members.join('_');
-    if (!chatHistory[groupRoom]) {
-      chatHistory[groupRoom] = [];
-    }
-    socket.emit('group dm created', groupRoom);
-  });
-
-  // 14. プロフィール取得
-  socket.on('get user profile', (username) => {
-    const prof = profiles[username] || { bio: '' };
-    socket.emit('user profile result', prof);
-  });
-
-  // 15. プロフィール更新
-  socket.on('update profile bio', (bioText) => {
-    if (!socket.username) return;
-    if (!profiles[socket.username]) profiles[socket.username] = {};
-    profiles[socket.username].bio = bioText;
-    socket.emit('profile bio updated', bioText);
-  });
-
-  // ★ 16. 管理者用：権限（ロール）作成
+  // 14. カスタム権限の作成
   socket.on('admin create role', (roleData) => {
     if (socket.username !== 'アルパカ') return;
     const { roleId, roleName, permissions } = roleData;
@@ -334,18 +307,7 @@ io.on('connection', (socket) => {
     io.emit('update user list', getUserList());
   });
 
-  // ★ 17. 管理者用：権限削除
-  socket.on('admin delete role', (roleId) => {
-    if (socket.username !== 'アルパカ' || roleId === 'admin') return;
-    delete roles[roleId];
-    for (const u of Object.keys(users)) {
-      if (users[u].role === roleId) users[u].role = null;
-    }
-    io.emit('roles updated', roles);
-    io.emit('update user list', getUserList());
-  });
-
-  // ★ 18. 管理者用：ユーザーへの権限（ロール）割り当て
+  // 15. カスタム権限の割り当て
   socket.on('admin assign role', (data) => {
     if (socket.username !== 'アルパカ') return;
     const { targetUser, roleId } = data;
@@ -356,7 +318,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 19. 管理者用：ユーザー＆ロールデータ取得
+  // 16. 管理者用リスト取得
   socket.on('get admin user list', () => {
     if (socket.username === 'アルパカ') {
       const userObj = {};
@@ -367,37 +329,13 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 20. 管理者用：DM一覧
-  socket.on('get admin dm list', () => {
-    if (socket.username === 'アルパカ') {
-      const dmRooms = [];
-      for (const roomName of Object.keys(chatHistory)) {
-        if (roomName.includes('_DM_') || roomName.includes('_GROUP_DM_')) {
-          let members = [];
-          if (roomName.includes('_GROUP_DM_')) {
-            members = roomName.replace('_GROUP_DM_', '').split('_');
-          } else {
-            members = roomName.split('_DM_');
-          }
-          dmRooms.push({
-            roomName: roomName,
-            members: members,
-            msgCount: chatHistory[roomName].length
-          });
-        }
-      }
-      socket.emit('admin dm list result', dmRooms);
-    }
-  });
-
-  // 21. 通常BAN
+  // 17. BAN・IP BAN・切断等
   socket.on('admin ban user', (targetUser) => {
     if (hasPermission(socket.username, 'ban')) {
       if (!bannedUsers.includes(targetUser)) bannedUsers.push(targetUser);
-
       for (const [id, s] of io.sockets.sockets) {
         if (s.username === targetUser) {
-          s.emit('banned notification', '権限者によりアカウントがBANされました。');
+          s.emit('banned notification', 'アカウントがBANされました。');
           s.disconnect();
         }
       }
@@ -405,35 +343,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 22. IP BAN
-  socket.on('admin ip ban user', (targetUser) => {
-    if (hasPermission(socket.username, 'ipBan')) {
-      const targetIp = userIPs[targetUser];
-      if (!bannedUsers.includes(targetUser)) bannedUsers.push(targetUser);
-      if (targetIp && !bannedIPs.includes(targetIp)) bannedIPs.push(targetIp);
-
-      for (const [id, s] of io.sockets.sockets) {
-        const sIp = getClientIp(s);
-        if (s.username === targetUser || (targetIp && sIp === targetIp)) {
-          s.emit('banned notification', '権限者によりIP BAN制限されました。');
-          s.disconnect();
-        }
-      }
-      socket.emit('admin ban success');
-    }
-  });
-
-  // 23. BAN解除
-  socket.on('admin unban user', (targetUser) => {
-    if (hasPermission(socket.username, 'ban')) {
-      bannedUsers = bannedUsers.filter(u => u !== targetUser);
-      const targetIp = userIPs[targetUser];
-      if (targetIp) bannedIPs = bannedIPs.filter(ip => ip !== targetIp);
-      socket.emit('admin ban success');
-    }
-  });
-
-  // 24. 切断
   socket.on('disconnect', () => {
     if (socket.username && users[socket.username]) {
       users[socket.username].lastSeen = new Date();
