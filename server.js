@@ -7,7 +7,6 @@ const fs = require('fs');
 const app = express();
 const server = http.createServer(app);
 
-// Render等のホスティング環境向けにCORSおよびSocket.IOオプションを設定
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -15,14 +14,14 @@ const io = new Server(server, {
   }
 });
 
-// Renderのディスク永続化パス対応 (RenderでDiskをマウントする場合は `/var/data` 等を指定)
+// Render等のデータ永続化パス設定
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 const STATUS_FILE = path.join(DATA_DIR, 'status.json');
 const BANNED_FILE = path.join(DATA_DIR, 'banned.json');
+const CHANNELS_FILE = path.join(DATA_DIR, 'channels.json'); // ★追加: チャンネル一覧ファイル
 
-// 保存用フォルダの作成
 if (!fs.existsSync(DATA_DIR)) {
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -31,7 +30,6 @@ if (!fs.existsSync(DATA_DIR)) {
   }
 }
 
-// データの読み込み関数
 function loadData(filePath, defaultValue) {
   try {
     if (fs.existsSync(filePath)) {
@@ -44,7 +42,6 @@ function loadData(filePath, defaultValue) {
   return defaultValue;
 }
 
-// データの保存関数
 function saveData(filePath, data) {
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
@@ -61,23 +58,21 @@ let chatHistory = loadData(MESSAGES_FILE, {
   "random": []
 });
 let userStatus = loadData(STATUS_FILE, {});
+// ★追加: チャンネルリストのロード（初期値は general と random）
+let channels = loadData(CHANNELS_FILE, ["general", "random"]);
 
-// オンラインソケットの管理 { socketId: username }
 const onlineSockets = {};
 
-// 管理者判定
 function isAdminUser(username) {
   return username === 'アルパカ';
 }
 
-// 静的ファイルの提供
 app.use(express.static(__dirname));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// ユーザーリストの全通知
 function broadcastUserList() {
   const list = {};
   for (const username of Object.keys(registeredUsers)) {
@@ -91,6 +86,11 @@ function broadcastUserList() {
     };
   }
   io.emit('update user list', list);
+}
+
+// ★追加: チャンネル一覧を全ユーザーに放送
+function broadcastChannelList() {
+  io.emit('update channel list', channels);
 }
 
 io.on('connection', (socket) => {
@@ -135,7 +135,7 @@ io.on('connection', (socket) => {
     socket.emit('auth success', { username, isAdmin: isAdminUser(username) });
   });
 
-  // オンラインユーザー登録 ＆ 過去の全DMルーム自動参加
+  // オンラインユーザー登録
   socket.on('register user', (username) => {
     if (bannedUsers.includes(username)) {
       socket.emit('banned notification', 'アカウントが停止（BAN）されました。');
@@ -147,11 +147,10 @@ io.on('connection', (socket) => {
     userStatus[username] = { isOnline: true, lastSeen: Date.now() };
     saveData(STATUS_FILE, userStatus);
 
-    // デフォルトチャンネル
-    socket.join('general');
-    socket.join('random');
+    // ★全公開チャンネルに自動参加させる
+    channels.forEach(ch => socket.join(ch));
 
-    // ★過去の全DMルームのうち、自分が含まれるものに自動参加させる
+    // DMルームへ自動参加
     for (const roomName of Object.keys(chatHistory)) {
       if (roomName.includes('_DM_')) {
         const members = roomName.split('_DM_');
@@ -162,8 +161,8 @@ io.on('connection', (socket) => {
     }
     
     broadcastUserList();
+    socket.emit('update channel list', channels); // チャンネルリストを送信
     
-    // 自分に関係のあるメッセージ履歴のみ送信
     const userHistory = {};
     for (const [room, msgs] of Object.entries(chatHistory)) {
       if (!room.includes('_DM_') || room.split('_DM_').includes(username)) {
@@ -171,6 +170,57 @@ io.on('connection', (socket) => {
       }
     }
     socket.emit('load history', userHistory);
+  });
+
+  // ★追加: 新規チャンネル作成
+  socket.on('create channel', (channelName) => {
+    const sender = onlineSockets[socket.id];
+    if (!sender || bannedUsers.includes(sender)) return;
+
+    // バリデーション（空文字列、既存重複、予約語の排除）
+    const trimmed = channelName.trim().toLowerCase();
+    if (!trimmed || trimmed.includes('_DM_')) {
+      return socket.emit('channel error', '無効なチャンネル名です。');
+    }
+    if (channels.includes(trimmed)) {
+      return socket.emit('channel error', 'そのチャンネル名は既に存在します。');
+    }
+
+    channels.push(trimmed);
+    if (!chatHistory[trimmed]) {
+      chatHistory[trimmed] = [];
+    }
+    
+    saveData(CHANNELS_FILE, channels);
+    saveData(MESSAGES_FILE, chatHistory);
+
+    // オンライン中の全ソケットをこの新チャンネルに参加させる
+    for (const sId of Object.keys(onlineSockets)) {
+      const sock = io.sockets.sockets.get(sId);
+      if (sock) sock.join(trimmed);
+    }
+
+    broadcastChannelList();
+  });
+
+  // ★追加: チャンネル削除（管理者専用）
+  socket.on('delete channel', (channelName) => {
+    const sender = onlineSockets[socket.id];
+    if (!isAdminUser(sender)) return;
+
+    // デフォルトチャンネルは削除不可にする保護
+    if (channelName === 'general' || channelName === 'random') {
+      return socket.emit('auth error', 'デフォルトチャンネルは削除できません。');
+    }
+
+    channels = channels.filter(ch => ch !== channelName);
+    delete chatHistory[channelName];
+
+    saveData(CHANNELS_FILE, channels);
+    saveData(MESSAGES_FILE, chatHistory);
+
+    broadcastChannelList();
+    io.emit('channel deleted', channelName);
   });
 
   // 部屋参加
@@ -204,7 +254,6 @@ io.on('connection', (socket) => {
     chatHistory[data.targetRoom].push(msgObj);
     saveData(MESSAGES_FILE, chatHistory);
 
-    // ★DMの場合、受信者（相手）がオンラインならそのソケットを該当ルームに即座参加させる
     if (data.targetRoom.includes('_DM_')) {
       const members = data.targetRoom.split('_DM_');
       for (const [sId, uName] of Object.entries(onlineSockets)) {
@@ -217,7 +266,6 @@ io.on('connection', (socket) => {
       }
     }
 
-    // 対象のルーム全体へ配信
     io.to(data.targetRoom).emit('chat message', msgObj);
   });
 
@@ -259,7 +307,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // チャンネル削除
+  // チャンネル内投稿全削除
   socket.on('clear channel', (roomName) => {
     const sender = onlineSockets[socket.id];
     if (!isAdminUser(sender)) return;
@@ -328,7 +376,7 @@ io.on('connection', (socket) => {
     socket.emit('admin ban success', { username: targetUsername, isBanned: true });
   });
 
-  // ★BAN解除処理（即時反映）
+  // BAN解除
   socket.on('admin unban user', (targetUsername) => {
     const sender = onlineSockets[socket.id];
     if (!isAdminUser(sender)) return;
@@ -356,7 +404,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Renderの環境変数 PORT (デフォルト 10000) で起動し、0.0.0.0 でバインド
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`サーバー起動中: port ${PORT}`);
