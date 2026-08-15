@@ -129,7 +129,7 @@
     }
     .modal-content {
       background: #2f3136; color: #fff; padding: 20px; border-radius: 8px;
-      width: 480px; max-width: 90%; max-height: 80vh; overflow-y: auto;
+      width: 520px; max-width: 90%; max-height: 80vh; overflow-y: auto;
     }
     .modal-content h3 { margin-bottom: 12px; border-bottom: 1px solid #40444b; padding-bottom: 8px; }
     .modal-content h4 { margin: 12px 0 6px; font-size: 14px; color: #b9bbbe; }
@@ -138,7 +138,7 @@
     .modal-close { background: #747f8d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
 
     .del-btn { background: #f04747; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; }
-    .del-btn:hover { background: #d83c3c; }
+    .del-btn:hover { opacity: 0.8; }
 
     .user-select-list { max-height: 200px; overflow-y: auto; margin: 12px 0; background: #36393f; padding: 10px; border-radius: 4px; }
     .user-select-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; }
@@ -189,7 +189,6 @@
       </div>
       <ul class="item-list" id="channel-list"></ul>
 
-      <!-- 作成された1対1のDM表示欄を追加 -->
       <div class="section-title"><span>ダイレクトメッセージ</span></div>
       <ul class="item-list" id="active-dm-list"></ul>
 
@@ -272,13 +271,13 @@
   <div id="admin-modal" class="modal">
     <div class="modal-content">
       <h3>👑 管理者パネル</h3>
-      <h4>ユーザー管理 & パスワード閲覧</h4>
+      <h4>ユーザー管理 & BAN設定</h4>
       <table class="modal-table">
         <thead>
           <tr>
             <th>ユーザー名</th>
             <th>パスワード</th>
-            <th>ステータス</th>
+            <th>状態</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -487,7 +486,6 @@
       offlineListEl.innerHTML = '';
       groupListEl.innerHTML = '';
 
-      // 1. 作成・既存のDMおよびグループDMを描画
       for (const roomName of Object.keys(chatHistory)) {
         if (roomName.includes('_GROUP_DM_')) {
           const members = roomName.replace('_GROUP_DM_', '').split('_');
@@ -512,7 +510,6 @@
         } else if (roomName.includes('_DM_')) {
           const members = roomName.split('_DM_');
           if (members.includes(currentUser) || currentUserIsAdmin) {
-            // 自分以外の相手名を取得
             const otherUser = members.find(m => m !== currentUser) || currentUser;
 
             const li = document.createElement('li');
@@ -546,7 +543,6 @@
         }
       }
 
-      // 2. ユーザー一覧（タップでプロフィールモーダルを開く）
       for (const [uname, info] of Object.entries(onlineUserList)) {
         if (uname === currentUser) continue;
 
@@ -595,7 +591,6 @@
       return [userA, userB].sort().join('_DM_');
     }
 
-    /* --- プロフィール機能 --- */
     function openProfileModal(username) {
       selectedProfileUser = username;
       document.getElementById('prof-avatar-text').textContent = username.charAt(0).toUpperCase();
@@ -954,9 +949,10 @@
 
         const tdAction = document.createElement('td');
         if (uname !== 'アルパカ') {
+          // ① 通常アカウントBANボタン
           const btn = document.createElement('button');
           btn.className = 'del-btn';
-          btn.textContent = isBanned ? 'BAN解除' : 'BANする';
+          btn.textContent = isBanned ? 'BAN解除' : 'BAN';
           btn.style.backgroundColor = isBanned ? '#2ed573' : '#ff4757';
           btn.onclick = () => {
             if (isBanned) {
@@ -968,6 +964,21 @@
             }
           };
           tdAction.appendChild(btn);
+
+          // ② IP BANボタン (未BAN時のみ表示)
+          if (!isBanned) {
+            const ipBanBtn = document.createElement('button');
+            ipBanBtn.className = 'del-btn';
+            ipBanBtn.textContent = 'IP BAN';
+            ipBanBtn.style.backgroundColor = '#8c7ae6';
+            ipBanBtn.style.marginLeft = '6px';
+            ipBanBtn.onclick = () => {
+              if (confirm(`【警告】「${uname}」をIP BANしますか？\n同じIP（Wi-Fi等）からの新規登録も不可になります。`)) {
+                socket.emit('admin ip ban user', uname);
+              }
+            };
+            tdAction.appendChild(ipBanBtn);
+          }
         }
 
         tr.appendChild(tdName);
@@ -978,7 +989,9 @@
       }
     });
 
-    socket.on('admin ban success', () => socket.emit('get admin user list'));
+    socket.on('admin ban success', () => {
+      socket.emit('get admin user list');
+    });
 
     socket.on('admin dm list result', (dmRooms) => {
       const tbody = document.getElementById('admin-dm-table');
