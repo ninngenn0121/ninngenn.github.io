@@ -626,9 +626,8 @@
           li.appendChild(badge);
         }
 
-        // クリック時に相手も確実にそのDMルームに参加させる
+        // クリック時にDMルームへ移動
         li.onclick = () => {
-          socket.emit('start dm', { targetUser: uname });
           switchRoom(dmRoom);
         };
 
@@ -685,7 +684,6 @@
 
       // 画面更新
       renderMessages();
-      socket.emit('get channels'); // 最新のチャンネルリスト要求
       renderUserLists();
     }
 
@@ -739,7 +737,6 @@
         // 未読件数加算
         unreadCounts[msgObj.targetRoom] = (unreadCounts[msgObj.targetRoom] || 0) + 1;
         renderUserLists();
-        socket.emit('get channels');
       }
     });
 
