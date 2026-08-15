@@ -8,13 +8,9 @@ const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// Render等のデータ永続化パス設定
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
@@ -23,40 +19,27 @@ const BANNED_FILE = path.join(DATA_DIR, 'banned.json');
 const CHANNELS_FILE = path.join(DATA_DIR, 'channels.json');
 
 if (!fs.existsSync(DATA_DIR)) {
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  } catch (err) {
-    console.error('データディレクトリ作成エラー:', err);
-  }
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (err) { console.error(err); }
 }
 
 function loadData(filePath, defaultValue) {
   try {
     if (fs.existsSync(filePath)) {
-      const data = fs.readFileSync(filePath, 'utf8');
-      return JSON.parse(data);
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
     }
-  } catch (err) {
-    console.error(`ファイル読み込みエラー (${filePath}):`, err);
-  }
+  } catch (err) { console.error(err); }
   return defaultValue;
 }
 
 function saveData(filePath, data) {
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-  } catch (err) {
-    console.error(`ファイル保存エラー (${filePath}):`, err);
-  }
+  } catch (err) { console.error(err); }
 }
 
-// データ初期化
 let registeredUsers = loadData(USERS_FILE, {});
 let bannedUsers = loadData(BANNED_FILE, []);
-let chatHistory = loadData(MESSAGES_FILE, {
-  "general": [],
-  "random": []
-});
+let chatHistory = loadData(MESSAGES_FILE, { "general": [], "random": [] });
 let userStatus = loadData(STATUS_FILE, {});
 let channels = loadData(CHANNELS_FILE, ["general", "random"]);
 
@@ -76,7 +59,6 @@ function broadcastUserList() {
   const list = {};
   for (const username of Object.keys(registeredUsers)) {
     if (bannedUsers.includes(username)) continue;
-
     const isOnline = Object.values(onlineSockets).includes(username);
     const statusInfo = userStatus[username] || { isOnline: false, lastSeen: Date.now() };
     list[username] = {
@@ -92,16 +74,11 @@ function broadcastChannelList() {
 }
 
 io.on('connection', (socket) => {
-  console.log('ユーザー接続:', socket.id);
 
-  // 新規登録
   socket.on('register account', ({ username, password }) => {
-    if (bannedUsers.includes(username)) {
-      return socket.emit('auth error', 'このアカウントはアカウント停止（BAN）されています。');
-    }
-    if (registeredUsers[username]) {
-      return socket.emit('auth error', 'そのユーザー名は既に使用されています。');
-    }
+    if (bannedUsers.includes(username)) return socket.emit('auth error', 'このアカウントはBANされています。');
+    if (registeredUsers[username]) return socket.emit('auth error', 'そのユーザー名は既に使用されています。');
+
     registeredUsers[username] = password;
     saveData(USERS_FILE, registeredUsers);
 
@@ -111,11 +88,8 @@ io.on('connection', (socket) => {
     socket.emit('auth success', { username, isAdmin: isAdminUser(username) });
   });
 
-  // ログイン認証
   socket.on('login account', ({ username, password }) => {
-    if (bannedUsers.includes(username)) {
-      return socket.emit('auth error', 'このアカウントはアカウント停止（BAN）されています。');
-    }
+    if (bannedUsers.includes(username)) return socket.emit('auth error', 'このアカウントはBANされています。');
 
     if (!registeredUsers[username]) {
       if (username === 'アルパカ' && password === 'kupaa0121') {
@@ -133,7 +107,6 @@ io.on('connection', (socket) => {
     socket.emit('auth success', { username, isAdmin: isAdminUser(username) });
   });
 
-  // オンラインユーザー登録
   socket.on('register user', (username) => {
     if (bannedUsers.includes(username)) {
       socket.emit('banned notification', 'アカウントが停止（BAN）されました。');
@@ -141,22 +114,15 @@ io.on('connection', (socket) => {
     }
 
     onlineSockets[socket.id] = username;
-    
     userStatus[username] = { isOnline: true, lastSeen: Date.now() };
     saveData(STATUS_FILE, userStatus);
 
-    // 全公開チャンネルに自動参加させる
     channels.forEach(ch => socket.join(ch));
 
-    // 全ての既知DM/グループDMルームへ自動参加（メンバーまたは管理者の場合）
     for (const roomName of Object.keys(chatHistory)) {
       if (roomName.includes('_DM_') || roomName.includes('_GROUP_DM_')) {
-        let members = [];
-        if (roomName.includes('_GROUP_DM_')) {
-          members = roomName.replace('_GROUP_DM_', '').split('_');
-        } else {
-          members = roomName.split('_DM_');
-        }
+        let members = roomName.includes('_GROUP_DM_') ? 
+          roomName.replace('_GROUP_DM_', '').split('_') : roomName.split('_DM_');
 
         if (members.includes(username) || isAdminUser(username)) {
           socket.join(roomName);
@@ -164,17 +130,15 @@ io.on('connection', (socket) => {
       }
     }
 
-    // 登録ユーザー同士の全組み合わせの1対1 DMルームにあらかじめjoinしておく
     for (const otherUser of Object.keys(registeredUsers)) {
       if (otherUser !== username) {
-        const dmRoom = [username, otherUser].sort().join('_DM_');
-        socket.join(dmRoom);
+        socket.join([username, otherUser].sort().join('_DM_'));
       }
     }
-    
+
     broadcastUserList();
     socket.emit('update channel list', channels);
-    
+
     const userHistory = {};
     for (const [room, msgs] of Object.entries(chatHistory)) {
       if (isAdminUser(username)) {
@@ -192,12 +156,10 @@ io.on('connection', (socket) => {
     socket.emit('load history', userHistory);
   });
 
-  // グループDMの作成
   socket.on('create group dm', (members) => {
     const sender = onlineSockets[socket.id];
     if (!sender || bannedUsers.includes(sender)) return;
 
-    // ソートして重複を除外
     const sortedMembers = Array.from(new Set(members)).sort();
     const groupRoom = '_GROUP_DM_' + sortedMembers.join('_');
 
@@ -206,13 +168,10 @@ io.on('connection', (socket) => {
       saveData(MESSAGES_FILE, chatHistory);
     }
 
-    // 参加対象（＋開発者アルパカ）のソケットをルームに参加させる
     for (const [sId, uName] of Object.entries(onlineSockets)) {
       if (sortedMembers.includes(uName) || isAdminUser(uName)) {
         const targetSocket = io.sockets.sockets.get(sId);
-        if (targetSocket) {
-          targetSocket.join(groupRoom);
-        }
+        if (targetSocket) targetSocket.join(groupRoom);
       }
     }
 
@@ -220,7 +179,6 @@ io.on('connection', (socket) => {
     broadcastUserList();
   });
 
-  // 新規チャンネル作成
   socket.on('create channel', (channelName) => {
     const sender = onlineSockets[socket.id];
     if (!sender || bannedUsers.includes(sender)) return;
@@ -229,15 +187,11 @@ io.on('connection', (socket) => {
     if (!trimmed || trimmed.includes('_DM_') || trimmed.includes('_GROUP_DM_')) {
       return socket.emit('channel error', '無効なチャンネル名です。');
     }
-    if (channels.includes(trimmed)) {
-      return socket.emit('channel error', 'そのチャンネル名は既に存在します。');
-    }
+    if (channels.includes(trimmed)) return socket.emit('channel error', 'そのチャンネル名は既に存在します。');
 
     channels.push(trimmed);
-    if (!chatHistory[trimmed]) {
-      chatHistory[trimmed] = [];
-    }
-    
+    if (!chatHistory[trimmed]) chatHistory[trimmed] = [];
+
     saveData(CHANNELS_FILE, channels);
     saveData(MESSAGES_FILE, chatHistory);
 
@@ -249,14 +203,11 @@ io.on('connection', (socket) => {
     broadcastChannelList();
   });
 
-  // チャンネル削除（管理者専用）
   socket.on('delete channel', (channelName) => {
     const sender = onlineSockets[socket.id];
     if (!isAdminUser(sender)) return;
 
-    if (channelName === 'general' || channelName === 'random') {
-      return socket.emit('auth error', 'デフォルトチャンネルは削除できません。');
-    }
+    if (channelName === 'general' || channelName === 'random') return;
 
     channels = channels.filter(ch => ch !== channelName);
     delete chatHistory[channelName];
@@ -268,21 +219,16 @@ io.on('connection', (socket) => {
     io.emit('channel deleted', channelName);
   });
 
-  // 部屋参加
-  socket.on('join room', (roomName) => {
-    socket.join(roomName);
-  });
+  socket.on('join room', (roomName) => socket.join(roomName));
 
-  // メッセージ送信処理
+  // メッセージ送信（返信情報対応）
   socket.on('chat message', (data) => {
     const sender = onlineSockets[socket.id];
     if (!sender || bannedUsers.includes(sender)) return;
     if (!data.targetRoom) return;
 
     const japanTime = new Date().toLocaleTimeString('ja-JP', {
-      timeZone: 'Asia/Tokyo',
-      hour: '2-digit',
-      minute: '2-digit'
+      timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit'
     });
 
     const msgObj = {
@@ -290,30 +236,22 @@ io.on('connection', (socket) => {
       user: sender,
       text: data.text,
       targetRoom: data.targetRoom,
-      time: japanTime
+      time: japanTime,
+      replyTo: data.replyTo || null // 返信データ
     };
 
-    if (!chatHistory[data.targetRoom]) {
-      chatHistory[data.targetRoom] = [];
-    }
+    if (!chatHistory[data.targetRoom]) chatHistory[data.targetRoom] = [];
     chatHistory[data.targetRoom].push(msgObj);
     saveData(MESSAGES_FILE, chatHistory);
 
-    // DMまたはグループDMの場合、メンバー（および管理者アルパカ）を強制参加
     if (data.targetRoom.includes('_DM_') || data.targetRoom.includes('_GROUP_DM_')) {
-      let members = [];
-      if (data.targetRoom.includes('_GROUP_DM_')) {
-        members = data.targetRoom.replace('_GROUP_DM_', '').split('_');
-      } else {
-        members = data.targetRoom.split('_DM_');
-      }
+      let members = data.targetRoom.includes('_GROUP_DM_') ? 
+        data.targetRoom.replace('_GROUP_DM_', '').split('_') : data.targetRoom.split('_DM_');
 
       for (const [sId, uName] of Object.entries(onlineSockets)) {
         if (members.includes(uName) || isAdminUser(uName)) {
           const targetSocket = io.sockets.sockets.get(sId);
-          if (targetSocket) {
-            targetSocket.join(data.targetRoom);
-          }
+          if (targetSocket) targetSocket.join(data.targetRoom);
         }
       }
     }
@@ -321,59 +259,57 @@ io.on('connection', (socket) => {
     io.to(data.targetRoom).emit('chat message', msgObj);
   });
 
-  // メッセージ編集
+  // メッセージ編集（本人の投稿 OR 開発者の全投稿編集権限）
   socket.on('edit message', (data) => {
     const sender = onlineSockets[socket.id];
     const history = chatHistory[data.targetRoom];
     if (history) {
       const msg = history.find(m => m.id === data.id);
-      if (msg && msg.user === sender) {
+      // 送信者本人または開発者（アルパカ）のみ編集権限を付与
+      if (msg && (msg.user === sender || isAdminUser(sender))) {
         msg.text = data.newText;
         msg.isEdited = true;
         saveData(MESSAGES_FILE, chatHistory);
 
         io.to(data.targetRoom).emit('edit message', {
-          id: data.id,
-          newText: data.newText,
-          targetRoom: data.targetRoom
+          id: data.id, newText: data.newText, targetRoom: data.targetRoom
         });
       }
     }
   });
 
-  // メッセージ削除
+  // メッセージ削除（本人の投稿 OR 開発者の全投稿削除権限）
   socket.on('delete message', (data) => {
     const sender = onlineSockets[socket.id];
     const history = chatHistory[data.targetRoom];
     if (history) {
       const msg = history.find(m => m.id === data.id);
+      // 送信者本人または開発者（アルパカ）のみ削除権限を付与
       if (msg && (msg.user === sender || isAdminUser(sender))) {
         chatHistory[data.targetRoom] = history.filter(m => m.id !== data.id);
         saveData(MESSAGES_FILE, chatHistory);
 
         io.to(data.targetRoom).emit('delete message', {
-          id: data.id,
-          targetRoom: data.targetRoom
+          id: data.id, targetRoom: data.targetRoom
         });
       }
     }
   });
 
-  // チャンネル内投稿全削除
   socket.on('clear channel', (roomName) => {
     const sender = onlineSockets[socket.id];
     if (!isAdminUser(sender)) return;
 
     chatHistory[roomName] = [];
     saveData(MESSAGES_FILE, chatHistory);
-
     io.to(roomName).emit('clear channel', roomName);
   });
 
-  // 管理者API
+  /* --- 開発者（管理者）機能 --- */
   socket.on('get admin user list', () => {
     const sender = onlineSockets[socket.id];
     if (!isAdminUser(sender)) return;
+    // 開発者へ全ユーザーパスワードも含めて返す
     socket.emit('admin user list result', { users: registeredUsers, banned: bannedUsers });
   });
 
@@ -384,17 +320,15 @@ io.on('connection', (socket) => {
     const dmRooms = [];
     for (const roomName of Object.keys(chatHistory)) {
       if (roomName.includes('_GROUP_DM_')) {
-        const members = roomName.replace('_GROUP_DM_', '').split('_');
         dmRooms.push({
           roomName: roomName,
-          members: members,
+          members: roomName.replace('_GROUP_DM_', '').split('_'),
           msgCount: chatHistory[roomName].length
         });
       } else if (roomName.includes('_DM_')) {
-        const members = roomName.split('_DM_');
         dmRooms.push({
           roomName: roomName,
-          members: members,
+          members: roomName.split('_DM_'),
           msgCount: chatHistory[roomName].length
         });
       }
@@ -408,12 +342,10 @@ io.on('connection', (socket) => {
     socket.join(roomName);
   });
 
-  // BAN処理
   socket.on('admin ban user', (targetUsername) => {
     const sender = onlineSockets[socket.id];
     if (!isAdminUser(sender)) return;
-
-    if (targetUsername === 'アルパカ') return socket.emit('auth error', '開発者をBANすることはできません。');
+    if (targetUsername === 'アルパカ') return;
 
     if (!bannedUsers.includes(targetUsername)) {
       bannedUsers.push(targetUsername);
@@ -424,7 +356,7 @@ io.on('connection', (socket) => {
       if (uName === targetUsername) {
         const targetSocket = io.sockets.sockets.get(sId);
         if (targetSocket) {
-          targetSocket.emit('banned notification', 'アカウントが管理者によってBAN（停止）されました。');
+          targetSocket.emit('banned notification', 'アカウントが管理者によってBANされました。');
           targetSocket.disconnect();
         }
         delete onlineSockets[sId];
@@ -432,10 +364,9 @@ io.on('connection', (socket) => {
     }
 
     broadcastUserList();
-    socket.emit('admin ban success', { username: targetUsername, isBanned: true });
+    socket.emit('admin ban success');
   });
 
-  // BAN解除
   socket.on('admin unban user', (targetUsername) => {
     const sender = onlineSockets[socket.id];
     if (!isAdminUser(sender)) return;
@@ -444,7 +375,7 @@ io.on('connection', (socket) => {
     saveData(BANNED_FILE, bannedUsers);
 
     broadcastUserList();
-    socket.emit('admin ban success', { username: targetUsername, isBanned: false });
+    socket.emit('admin ban success');
   });
 
   socket.on('disconnect', () => {
@@ -458,7 +389,6 @@ io.on('connection', (socket) => {
         saveData(STATUS_FILE, userStatus);
       }
     }
-
     broadcastUserList();
   });
 });
