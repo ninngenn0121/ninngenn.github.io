@@ -192,6 +192,23 @@
       justify-content: space-between;
       align-items: center;
     }
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .notif-btn {
+      background: #4f545c;
+      color: white;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .notif-btn.active {
+      background: #43b581;
+    }
     #messages-container {
       flex: 1;
       padding: 16px;
@@ -292,7 +309,7 @@
       background: #4752c4;
     }
 
-    /* 管理者モーダル */
+    /* モーダル共通 */
     .modal {
       display: none;
       position: fixed;
@@ -351,6 +368,23 @@
     .del-btn:hover {
       background: #d83c3c;
     }
+
+    /* グループDM作成チェックボックス一覧 */
+    .user-select-list {
+      max-height: 200px;
+      overflow-y: auto;
+      margin: 12px 0;
+      background: #36393f;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .user-select-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 0;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -380,6 +414,13 @@
       </div>
       <ul class="item-list" id="channel-list"></ul>
 
+      <!-- グループDMエリア -->
+      <div class="section-title">
+        <span>グループDM</span>
+        <button class="add-btn" onclick="openGroupDmModal()" title="グループDMを作成">+</button>
+      </div>
+      <ul class="item-list" id="group-dm-list"></ul>
+
       <!-- オンラインユーザー (DM) エリア -->
       <div class="section-title">
         <span>オンライン</span>
@@ -397,7 +438,10 @@
     <div id="main-chat">
       <div class="chat-header">
         <span id="current-room-title"># general</span>
-        <button id="clear-channel-btn" class="del-btn" style="display: none;" onclick="clearCurrentChannel()">チャンネル内全消去</button>
+        <div class="header-controls">
+          <button id="notif-toggle-btn" class="notif-btn" onclick="toggleNotifications()">🔔 通知: OFF</button>
+          <button id="clear-channel-btn" class="del-btn" style="display: none;" onclick="clearCurrentChannel()">チャンネル内全消去</button>
+        </div>
       </div>
 
       <div id="messages-container"></div>
@@ -407,6 +451,21 @@
           <input type="text" id="message-input" placeholder="メッセージを入力..." onkeypress="handleKeyPress(event)">
           <button onclick="sendMessage()">送信</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- グループDM作成モーダル -->
+  <div id="group-dm-modal" class="modal">
+    <div class="modal-content">
+      <h3>👥 グループDMを作成</h3>
+      <p style="font-size: 12px; color: #b9bbbe;">参加させるメンバーを選択してください（あなた自身は自動で含まれます）:</p>
+      
+      <div id="group-user-select-list" class="user-select-list"></div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <button class="modal-close" style="float:none;" onclick="closeGroupDmModal()">キャンセル</button>
+        <button style="background: #5865f2; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;" onclick="createGroupDm()">作成する</button>
       </div>
     </div>
   </div>
@@ -428,11 +487,11 @@
         <tbody id="admin-user-table"></tbody>
       </table>
 
-      <h4>DM監視一覧</h4>
+      <h4>DM / グループDM 監視一覧</h4>
       <table class="modal-table">
         <thead>
           <tr>
-            <th>DMルーム</th>
+            <th>DM / グループ</th>
             <th>件数</th>
             <th>操作</th>
           </tr>
@@ -456,6 +515,87 @@
     let chatHistory = {};
     let unreadCounts = {};
     let onlineUserList = {};
+
+    // 通知設定
+    let notificationsEnabled = false;
+
+    function toggleNotifications() {
+      if (!notificationsEnabled) {
+        if ("Notification" in window) {
+          Notification.requestPermission().then(permission => {
+            if (permission === "granted") {
+              notificationsEnabled = true;
+              updateNotifBtn();
+              playNotificationSound(); // テスト音
+            } else {
+              alert("通知がブラウザで許可されていません。");
+            }
+          });
+        } else {
+          alert("お使いのブラウザはWeb通知に対応していません。");
+        }
+      } else {
+        notificationsEnabled = false;
+        updateNotifBtn();
+      }
+    }
+
+    function updateNotifBtn() {
+      const btn = document.getElementById('notif-toggle-btn');
+      if (notificationsEnabled) {
+        btn.textContent = '🔔 通知: ON';
+        btn.classList.add('active');
+      } else {
+        btn.textContent = '🔔 通知: OFF';
+        btn.classList.remove('active');
+      }
+    }
+
+    // Web Audio API を用いた効果音生成
+    function playNotificationSound() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1); // A5
+
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      } catch (e) {
+        console.error("音声の再生に失敗しました", e);
+      }
+    }
+
+    function triggerNotification(msgObj) {
+      if (!notificationsEnabled) return;
+
+      playNotificationSound();
+
+      if (Notification.permission === "granted") {
+        let roomLabel = msgObj.targetRoom;
+        if (roomLabel.includes('_GROUP_DM_')) {
+          roomLabel = 'グループDM';
+        } else if (roomLabel.includes('_DM_')) {
+          roomLabel = 'ダイレクトメッセージ';
+        } else {
+          roomLabel = `# ${roomLabel}`;
+        }
+
+        new Notification(`新着メッセージ (${roomLabel})`, {
+          body: `${msgObj.user}: ${msgObj.text}`,
+          icon: 'https://cdn-icons-png.flaticon.com/512/732/732200.png'
+        });
+      }
+    }
 
     // 認証モード切り替え
     function toggleAuthMode() {
@@ -496,7 +636,6 @@
 
       socket.emit('register user', currentUser);
       
-      // 1分ごとに表示を更新（オフライン時間のリアルタイム更新用）
       setInterval(renderUserLists, 60000);
     });
 
@@ -522,7 +661,6 @@
         nameSpan.textContent = `# ${ch}`;
         li.appendChild(nameSpan);
 
-        // 未読バッジ
         if (unreadCounts[ch]) {
           const badge = document.createElement('span');
           badge.className = 'badge';
@@ -530,7 +668,6 @@
           li.appendChild(badge);
         }
 
-        // 管理者用チャンネル削除ボタン（general, random 以外）
         if (currentUserIsAdmin && ch !== 'general' && ch !== 'random') {
           const delBtn = document.createElement('button');
           delBtn.className = 'del-btn';
@@ -550,13 +687,12 @@
       });
     });
 
-    // ユーザーリスト & DMリスト描画
+    // ユーザーリスト & 1対1 DMリスト & グループDM描画
     socket.on('update user list', (users) => {
       onlineUserList = users;
       renderUserLists();
     });
 
-    // 経過時間計算フォーマット
     function formatOfflineTime(lastSeen) {
       if (!lastSeen) return 'オフライン';
       const diffMs = Date.now() - new Date(lastSeen).getTime();
@@ -573,12 +709,40 @@
     function renderUserLists() {
       const onlineListEl = document.getElementById('online-dm-list');
       const offlineListEl = document.getElementById('offline-dm-list');
+      const groupListEl = document.getElementById('group-dm-list');
       
       onlineListEl.innerHTML = '';
       offlineListEl.innerHTML = '';
+      groupListEl.innerHTML = '';
 
+      // グループDMのレンダリング
+      for (const roomName of Object.keys(chatHistory)) {
+        if (roomName.includes('_GROUP_DM_')) {
+          const members = roomName.replace('_GROUP_DM_', '').split('_');
+          if (members.includes(currentUser) || currentUserIsAdmin) {
+            const li = document.createElement('li');
+            if (roomName === currentRoom) li.classList.add('active');
+
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = `👨‍👩‍👧‍👦 ${members.join(', ')}`;
+            li.appendChild(nameSpan);
+
+            if (unreadCounts[roomName]) {
+              const badge = document.createElement('span');
+              badge.className = 'badge';
+              badge.textContent = unreadCounts[roomName];
+              li.appendChild(badge);
+            }
+
+            li.onclick = () => switchRoom(roomName);
+            groupListEl.appendChild(li);
+          }
+        }
+      }
+
+      // 1対1 DMリストのレンダリング
       for (const [uname, info] of Object.entries(onlineUserList)) {
-        if (uname === currentUser) continue; // 自分はリストから外す
+        if (uname === currentUser) continue;
 
         const li = document.createElement('li');
         const dmRoom = getDmRoomName(currentUser, uname);
@@ -606,7 +770,6 @@
 
         textGroup.appendChild(nameSpan);
 
-        // オフラインの場合、経過時間を表示
         if (!info.isOnline) {
           const timeSpan = document.createElement('span');
           timeSpan.className = 'offline-time';
@@ -618,7 +781,6 @@
         userContainer.appendChild(textGroup);
         li.appendChild(userContainer);
 
-        // 未読バッジ
         if (unreadCounts[dmRoom]) {
           const badge = document.createElement('span');
           badge.className = 'badge';
@@ -626,7 +788,6 @@
           li.appendChild(badge);
         }
 
-        // クリック時にDMルームへ移動
         li.onclick = () => {
           switchRoom(dmRoom);
         };
@@ -639,7 +800,6 @@
       }
     }
 
-    // DMルーム名の生成（アルファベット順にソートして固定化）
     function getDmRoomName(userA, userB) {
       return [userA, userB].sort().join('_DM_');
     }
@@ -648,7 +808,6 @@
     socket.on('load history', (history) => {
       chatHistory = history;
 
-      // 未読件数の判定
       for (const [room, msgs] of Object.entries(history)) {
         if (room !== currentRoom && msgs.length > 0) {
           unreadCounts[room] = msgs.length;
@@ -662,27 +821,26 @@
     // ルーム切り替え
     function switchRoom(roomName) {
       currentRoom = roomName;
-      delete unreadCounts[roomName]; // 未読クリア
+      delete unreadCounts[roomName];
 
       socket.emit('join room', roomName);
 
-      // チャットタイトルの変更
-      if (roomName.includes('_DM_')) {
+      if (roomName.includes('_GROUP_DM_')) {
+        const members = roomName.replace('_GROUP_DM_', '').split('_');
+        document.getElementById('current-room-title').textContent = `👨‍👩‍👧‍👦 ${members.join(', ')}`;
+      } else if (roomName.includes('_DM_')) {
         const members = roomName.split('_DM_');
-        const targetUser = members.find(m => m !== currentUser) || members[0];
         document.getElementById('current-room-title').textContent = `@ ${members.join(' ↔ ')}`;
       } else {
         document.getElementById('current-room-title').textContent = `# ${roomName}`;
       }
 
-      // チャンネルクリアボタン表示判定（管理者の場合のみ）
       if (currentUserIsAdmin) {
         document.getElementById('clear-channel-btn').style.display = 'block';
       } else {
         document.getElementById('clear-channel-btn').style.display = 'none';
       }
 
-      // 画面更新
       renderMessages();
       renderUserLists();
     }
@@ -694,6 +852,59 @@
         socket.emit('create channel', channelName);
       }
     }
+
+    // グループDM作成モーダル制御
+    function openGroupDmModal() {
+      const container = document.getElementById('group-user-select-list');
+      container.innerHTML = '';
+
+      const users = Object.keys(onlineUserList).filter(u => u !== currentUser);
+      if (users.length === 0) {
+        return alert("グループDMを作成できる他のユーザーがいません。");
+      }
+
+      users.forEach(uname => {
+        const div = document.createElement('div');
+        div.className = 'user-select-item';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = uname;
+        checkbox.id = `chk_user_${uname}`;
+
+        const label = document.createElement('label');
+        label.htmlFor = `chk_user_${uname}`;
+        label.textContent = uname;
+
+        div.appendChild(checkbox);
+        div.appendChild(label);
+        container.appendChild(div);
+      });
+
+      document.getElementById('group-dm-modal').style.display = 'flex';
+    }
+
+    function closeGroupDmModal() {
+      document.getElementById('group-dm-modal').style.display = 'none';
+    }
+
+    function createGroupDm() {
+      const checkboxes = document.querySelectorAll('#group-user-select-list input[type="checkbox"]:checked');
+      const selectedUsers = Array.from(checkboxes).map(cb => cb.value);
+
+      if (selectedUsers.length < 1) {
+        return alert("少なくとも1人以上のユーザーを選択してください。");
+      }
+
+      selectedUsers.push(currentUser); // 自分を追加
+
+      socket.emit('create group dm', selectedUsers);
+      closeGroupDmModal();
+    }
+
+    socket.on('group dm created', (groupRoom) => {
+      switchRoom(groupRoom);
+    });
 
     socket.on('channel error', (msg) => {
       alert(msg);
@@ -734,9 +945,13 @@
       if (msgObj.targetRoom === currentRoom) {
         renderMessages();
       } else {
-        // 未読件数加算
         unreadCounts[msgObj.targetRoom] = (unreadCounts[msgObj.targetRoom] || 0) + 1;
         renderUserLists();
+      }
+
+      // 自分が送信したものではない場合、通知を発火
+      if (msgObj.user !== currentUser) {
+        triggerNotification(msgObj);
       }
     });
 
@@ -778,7 +993,6 @@
         item.appendChild(header);
         item.appendChild(textDiv);
 
-        // 自分または管理者の場合に操作ボタンを追加
         if (msg.user === currentUser || currentUserIsAdmin) {
           const actions = document.createElement('div');
           actions.className = 'msg-actions';
