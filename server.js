@@ -2,27 +2,60 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// index.html の提供
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
+// データ保存用ファイルパス
+const DATA_DIR = path.join(__dirname, 'data');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 
-// 登録ユーザーDB (メモリ上) { username: password }
-const registeredUsers = {};
+// 保存用フォルダがない場合は作成
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// データの読み込み関数
+function loadData(filePath, defaultValue) {
+  try {
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (err) {
+    console.error(`ファイル読み込みエラー (${filePath}):`, err);
+  }
+  return defaultValue;
+}
+
+// データの保存関数
+function saveData(filePath, data) {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error(`ファイル保存エラー (${filePath}):`, err);
+  }
+}
+
+// 登録ユーザーDB { username: password }
+let registeredUsers = loadData(USERS_FILE, {});
+
+// 全メッセージ履歴 { roomName: [ { id, user, text, targetRoom, time, isEdited }, ... ] }
+let chatHistory = loadData(MESSAGES_FILE, {
+  "general": [],
+  "random": []
+});
 
 // オンラインユーザー管理 { socketId: username }
 const onlineUsers = {};
 
-// 全メッセージ履歴
-const chatHistory = {
-  "general": [],
-  "random": []
-};
+// index.html の提供
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 io.on('connection', (socket) => {
   console.log('ユーザー接続:', socket.id);
@@ -33,6 +66,8 @@ io.on('connection', (socket) => {
       return socket.emit('auth error', 'そのユーザー名は既に使用されています。');
     }
     registeredUsers[username] = password;
+    saveData(USERS_FILE, registeredUsers);
+
     socket.emit('auth success', { username, isAdmin: (username === 'アルパカ' && password === 'kupaa0121') });
   });
 
@@ -41,6 +76,7 @@ io.on('connection', (socket) => {
     if (!registeredUsers[username]) {
       if (username === 'アルパカ' && password === 'kupaa0121') {
         registeredUsers[username] = password;
+        saveData(USERS_FILE, registeredUsers);
       } else {
         return socket.emit('auth error', 'ユーザーが存在しません。新規登録してください。');
       }
@@ -91,6 +127,7 @@ io.on('connection', (socket) => {
       chatHistory[data.targetRoom] = [];
     }
     chatHistory[data.targetRoom].push(msgObj);
+    saveData(MESSAGES_FILE, chatHistory);
 
     io.to(data.targetRoom).emit('chat message', msgObj);
   });
@@ -103,6 +140,8 @@ io.on('connection', (socket) => {
       if (msg) {
         msg.text = data.newText;
         msg.isEdited = true;
+        saveData(MESSAGES_FILE, chatHistory);
+
         io.to(data.targetRoom).emit('edit message', {
           id: data.id,
           newText: data.newText,
@@ -117,6 +156,8 @@ io.on('connection', (socket) => {
     const history = chatHistory[data.targetRoom];
     if (history) {
       chatHistory[data.targetRoom] = history.filter(m => m.id !== data.id);
+      saveData(MESSAGES_FILE, chatHistory);
+
       io.to(data.targetRoom).emit('delete message', {
         id: data.id,
         targetRoom: data.targetRoom
@@ -127,6 +168,8 @@ io.on('connection', (socket) => {
   // チャンネル投稿全削除
   socket.on('clear channel', (roomName) => {
     chatHistory[roomName] = [];
+    saveData(MESSAGES_FILE, chatHistory);
+
     io.to(roomName).emit('clear channel', roomName);
   });
 
