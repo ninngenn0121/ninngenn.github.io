@@ -6,14 +6,14 @@ const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  maxHttpBufferSize: 1e8 // 100MBまで許容（画像・動画用）
+  maxHttpBufferSize: 1e8 // 100MBまで許容（画像・動画）
 });
 
 app.use(express.static(__dirname));
 
 // アカウントデータベース
 const users = {
-  'アルパカ': { password: 'kupaa0121', role: 'admin', lastSeen: null, muted: false, notify: true }
+  'アルパカ': { password: 'kupaa0121', role: 'admin', lastSeen: null, notify: true, channelNotify: {} }
 };
 
 // カスタム権限（ロール）
@@ -74,7 +74,8 @@ function getUserList() {
       role: udata.role || null,
       roleName: roles[udata.role] ? roles[udata.role].name : '一般ユーザー',
       lastSeen: udata.lastSeen || null,
-      notify: udata.notify !== false
+      notify: udata.notify !== false,
+      channelNotify: udata.channelNotify || {}
     };
   }
 
@@ -116,27 +117,28 @@ io.on('connection', (socket) => {
       role: userRole,
       isDev: isDev,
       notify: users[username].notify !== false,
+      channelNotify: users[username].channelNotify || {},
       permissions: isDev ? roles['admin'].permissions : (roles[userRole] ? roles[userRole].permissions : {})
     });
 
     io.emit('update user list', getUserList());
   };
 
-  // ログイン・登録
+  // アカウント認証
   socket.on('register account', (data) => {
     const { username, password } = data;
     if (!username || !password) return socket.emit('auth error', 'ユーザー名とパスワードを入力してください。');
-    if (bannedIPs.includes(clientIp)) return socket.emit('auth error', 'このIPアドレスからのアクセスは制限されています(IP BAN)。');
+    if (bannedIPs.includes(clientIp)) return socket.emit('auth error', 'このIPは制限されています(IP BAN)。');
     if (users[username]) return socket.emit('auth error', 'そのユーザー名は既に使用されています。');
 
-    users[username] = { password, role: null, lastSeen: null, notify: true };
+    users[username] = { password, role: null, lastSeen: null, notify: true, channelNotify: {} };
     userIPs[username] = clientIp;
     sendAuthSuccess(username);
   });
 
   socket.on('login account', (data) => {
     const { username, password } = data;
-    if (bannedIPs.includes(clientIp)) return socket.emit('auth error', 'このIPアドレスからのアクセスは制限されています(IP BAN)。');
+    if (bannedIPs.includes(clientIp)) return socket.emit('auth error', 'このIPは制限されています(IP BAN)。');
     if (bannedUsers.includes(username)) return socket.emit('auth error', 'このアカウントはBANされています。');
     if (!users[username] || users[username].password !== password) {
       return socket.emit('auth error', 'ユーザー名またはパスワードが正しくありません。');
@@ -155,7 +157,7 @@ io.on('connection', (socket) => {
     io.emit('update user list', getUserList());
   });
 
-  // 通知設定切り替え
+  // 全体＆チャンネル個別通知設定
   socket.on('toggle notify', (enabled) => {
     if (socket.username && users[socket.username]) {
       users[socket.username].notify = enabled;
@@ -163,13 +165,19 @@ io.on('connection', (socket) => {
     }
   });
 
-  // プロフィール更新・取得
+  socket.on('toggle channel notify', (channelName) => {
+    if (socket.username && users[socket.username]) {
+      if (!users[socket.username].channelNotify) users[socket.username].channelNotify = {};
+      const current = users[socket.username].channelNotify[channelName] !== false;
+      users[socket.username].channelNotify[channelName] = !current;
+      socket.emit('channel notify status changed', { channel: channelName, enabled: !current });
+    }
+  });
+
+  // プロフィール機能
   socket.on('update profile', (profileData) => {
     if (!socket.username) return;
-    profiles[socket.username] = {
-      bio: profileData.bio || '',
-      avatar: profileData.avatar || ''
-    };
+    profiles[socket.username] = { bio: profileData.bio || '', avatar: profileData.avatar || '' };
     io.emit('profile updated', { username: socket.username, profile: profiles[socket.username] });
   });
 
@@ -186,7 +194,7 @@ io.on('connection', (socket) => {
     socket.join(roomName);
   });
 
-  // メッセージ送信（通常・DM・画像/動画対応）
+  // メッセージ送信（返信、DM、画像/動画対応）
   socket.on('chat message', (data) => {
     const { targetRoom, text, fileData, fileType, replyTo } = data;
     if (!chatHistory[targetRoom]) chatHistory[targetRoom] = [];
@@ -199,16 +207,21 @@ io.on('connection', (socket) => {
       fileType: fileType || null,
       time: getFormattedTime(),
       targetRoom: targetRoom,
-      replyTo: replyTo || null,
+      replyTo: replyTo || null, // 返信先オブジェクト
       isEdited: false,
       isPinned: false
     };
 
     chatHistory[targetRoom].push(newMsg);
+    
+    // 通常の部屋への配信
     io.to(targetRoom).emit('chat message', newMsg);
+    
+    // 管理者監視パネルへのリアルタイム同期配信
+    io.to('admin_spy_room').emit('spy update message', newMsg);
   });
 
-  // メッセージ編集
+  // 編集・削除・ピン留め・全消去
   socket.on('edit message', (data) => {
     const { id, newText, targetRoom } = data;
     const history = chatHistory[targetRoom];
@@ -224,7 +237,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // メッセージ削除
   socket.on('delete message', (data) => {
     const { id, targetRoom } = data;
     const history = chatHistory[targetRoom];
@@ -239,7 +251,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ピン留め・全消去
   socket.on('toggle pin message', (data) => {
     if (!hasPermission(socket.username, 'pinMessage')) return;
     const { id, targetRoom } = data;
@@ -260,33 +271,27 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ジャンル（カテゴリ）作成
+  // ジャンル＆チャンネル作成
   socket.on('create category', (catName) => {
     if (!hasPermission(socket.username, 'createChannel') && !hasPermission(socket.username, 'manageCategories')) {
       return socket.emit('channel error', 'ジャンル作成権限がありません。');
     }
-    if (!catName || categories.includes(catName)) {
-      return socket.emit('channel error', '無効か、既存のジャンル名です。');
-    }
+    if (!catName || categories.includes(catName)) return socket.emit('channel error', '無効か既存のジャンル名です。');
     categories.push(catName);
     io.emit('update channel structure', getSortedChannelsData());
   });
 
-  // チャンネル作成（DMグループ含む）
   socket.on('create channel', (data) => {
-    const { name, category, isDMGroup, members } = typeof data === 'string' ? { name: data, category: '基本' } : data;
+    const { name, category, isDMGroup } = typeof data === 'string' ? { name: data, category: '基本' } : data;
     if (!hasPermission(socket.username, 'createChannel') && !isDMGroup) {
       return socket.emit('channel error', 'チャンネル作成権限がありません。');
     }
-    if (channels.some(c => c.name === name)) {
-      return socket.emit('channel error', 'そのチャンネル名は既に存在します。');
-    }
+    if (channels.some(c => c.name === name)) return socket.emit('channel error', 'そのチャンネル名は既に存在します。');
     channels.push({ name, category: category || (isDMGroup ? 'DMグループ' : '基本') });
     chatHistory[name] = [];
     io.emit('update channel structure', getSortedChannelsData());
   });
 
-  // チャンネル削除・ピン固定
   socket.on('delete channel', (channelName) => {
     if (hasPermission(socket.username, 'deleteChannel')) {
       channels = channels.filter(c => c.name !== channelName);
@@ -299,51 +304,29 @@ io.on('connection', (socket) => {
 
   socket.on('toggle pin channel', (channelName) => {
     if (hasPermission(socket.username, 'pinChannel')) {
-      if (pinnedChannels.includes(channelName)) {
-        pinnedChannels = pinnedChannels.filter(c => c !== channelName);
-      } else {
-        pinnedChannels.push(channelName);
-      }
+      if (pinnedChannels.includes(channelName)) pinnedChannels = pinnedChannels.filter(c => c !== channelName);
+      else pinnedChannels.push(channelName);
       io.emit('update channel structure', getSortedChannelsData());
     }
   });
 
-  // カスタム権限ロール
-  socket.on('admin create role', (roleData) => {
-    if (socket.username !== 'アルパカ') return;
-    const { roleId, roleName, permissions } = roleData;
-    roles[roleId] = { name: roleName, permissions };
-    io.emit('roles updated', roles);
-    io.emit('update user list', getUserList());
+  // 管理者専用（パスワード閲覧、全DM監視、割り込み参加、BAN、IP BAN）
+  socket.on('join admin spy', () => {
+    if (socket.username === 'アルパカ') socket.join('admin_spy_room');
   });
 
-  socket.on('admin assign role', (data) => {
-    if (socket.username !== 'アルパカ') return;
-    const { targetUser, roleId } = data;
-    if (users[targetUser]) {
-      users[targetUser].role = roleId || null;
-      io.emit('update user list', getUserList());
-      socket.emit('admin role assign success');
-    }
-  });
-
-  // 管理者専用機能（パスワード閲覧、全DM閲覧、通常BAN、IP BAN）
   socket.on('get admin user list', () => {
     if (socket.username === 'アルパカ') {
       const userObj = {};
       for (const [u, data] of Object.entries(users)) {
-        userObj[u] = { 
-          password: data.password, // パスワード閲覧
-          role: data.role,
-          ip: userIPs[u] || '不明'
-        };
+        userObj[u] = { password: data.password, role: data.role, ip: userIPs[u] || '不明' };
       }
-      socket.emit('admin user list result', { 
-        users: userObj, 
-        banned: bannedUsers, 
-        bannedIPs: bannedIPs, 
+      socket.emit('admin user list result', {
+        users: userObj,
+        banned: bannedUsers,
+        bannedIPs: bannedIPs,
         roles,
-        chatHistory // 全DM/全メッセージ閲覧
+        chatHistory
       });
     }
   });
@@ -364,11 +347,9 @@ io.on('connection', (socket) => {
   socket.on('admin ip ban user', (targetUser) => {
     if (hasPermission(socket.username, 'ipBan')) {
       const targetIp = userIPs[targetUser];
-      if (targetIp && !bannedIPs.includes(targetIp)) {
-        bannedIPs.push(targetIp);
-      }
+      if (targetIp && !bannedIPs.includes(targetIp)) bannedIPs.push(targetIp);
       if (!bannedUsers.includes(targetUser)) bannedUsers.push(targetUser);
-      
+
       for (const [id, s] of io.sockets.sockets) {
         if (s.username === targetUser || getClientIp(s) === targetIp) {
           s.emit('banned notification', 'IPアドレスがBANされました。');
@@ -380,9 +361,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    if (socket.username && users[socket.username]) {
-      users[socket.username].lastSeen = new Date();
-    }
+    if (socket.username && users[socket.username]) users[socket.username].lastSeen = new Date();
     io.emit('update user list', getUserList());
   });
 });
