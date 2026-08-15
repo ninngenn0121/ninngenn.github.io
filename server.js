@@ -4,32 +4,37 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+// 画像・動画のデータ送信（Base64）に対応するため制限を拡大 (50MB)
+const io = new Server(server, {
+  maxHttpBufferSize: 1e8 // 100MB
+});
 
 app.use(express.static(__dirname));
 
 // データベース代わりのメモリ保持オブジェクト
 const users = {
-  'アルパカ': { password: 'kupaa0121', lastSeen: null } // ★ ここを修正
+  'アルパカ': { password: 'kupaa0121', lastSeen: null } // 管理者アカウント
 };
 let bannedUsers = [];
 let bannedIPs = [];      // IP BAN対象リスト
 let userIPs = {};        // ユーザー名 -> IPアドレス のマップ
-let profiles = {};       // プロフィール(自己紹介など)
+let profiles = {};       // プロフィール
 
 let channels = ['general', 'random'];
+let pinnedChannels = []; // ★開発者が固定したチャンネルのリスト
 let chatHistory = {
   'general': [],
   'random': []
 };
 
-// IPアドレス取得ヘルパー（リバースプロキシ環境にも対応）
+// IPアドレス取得ヘルパー
 function getClientIp(socket) {
   const forwarded = socket.handshake.headers['x-forwarded-for'];
   return forwarded ? forwarded.split(',')[0].trim() : socket.handshake.address;
 }
 
-// ユーザー一覧を最新状態で取得する関数
+// ユーザー一覧取得
 function getUserList() {
   const userList = {};
   for (const [uname, udata] of Object.entries(users)) {
@@ -39,7 +44,6 @@ function getUserList() {
     };
   }
 
-  // オンライン状態を上書き
   for (const [socketId, socket] of io.sockets.sockets) {
     if (socket.username) {
       if (!userList[socket.username]) {
@@ -51,6 +55,35 @@ function getUserList() {
   return userList;
 }
 
+// チャンネルリストを「固定チャンネル」＋「五十音順ソート」にして取得
+function getSortedChannels() {
+  const normalChannels = channels
+    .filter(c => !pinnedChannels.includes(c))
+    .sort((a, b) => a.localeCompare(b, 'ja'));
+
+  const pinnedSorted = pinnedChannels
+    .slice()
+    .sort((a, b) => a.localeCompare(b, 'ja'));
+
+  return {
+    pinned: pinnedSorted,
+    normal: normalChannels
+  };
+}
+
+// 時間フォーマット関数 (日本時間)
+function getFormattedTime() {
+  const d = new Date();
+  return d.toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
 io.on('connection', (socket) => {
   const clientIp = getClientIp(socket);
 
@@ -59,7 +92,6 @@ io.on('connection', (socket) => {
     const { username, password } = data;
     if (!username || !password) return socket.emit('auth error', 'ユーザー名とパスワードを入力してください。');
     
-    // IP BANチェック
     if (bannedIPs.includes(clientIp)) {
       return socket.emit('auth error', 'このネットワーク（IPアドレス）からのアクセスは制限されています。');
     }
@@ -67,7 +99,7 @@ io.on('connection', (socket) => {
     if (users[username]) return socket.emit('auth error', 'そのユーザー名は既に使用されています。');
 
     users[username] = { password: password, lastSeen: null };
-    userIPs[username] = clientIp; // IPを記録
+    userIPs[username] = clientIp;
     socket.username = username;
 
     socket.emit('auth success', {
@@ -82,12 +114,10 @@ io.on('connection', (socket) => {
   socket.on('login account', (data) => {
     const { username, password } = data;
     
-    // IP BANチェック
     if (bannedIPs.includes(clientIp)) {
       return socket.emit('auth error', 'このネットワーク（IPアドレス）からのアクセスは制限されています。');
     }
 
-    // BANユーザーチェック
     if (bannedUsers.includes(username)) {
       return socket.emit('auth error', 'このアカウントはBANされています。');
     }
@@ -96,7 +126,7 @@ io.on('connection', (socket) => {
       return socket.emit('auth error', 'ユーザー名またはパスワードが正しくありません。');
     }
 
-    userIPs[username] = clientIp; // 最新IPを更新記録
+    userIPs[username] = clientIp;
     socket.username = username;
 
     socket.emit('auth success', {
@@ -107,12 +137,12 @@ io.on('connection', (socket) => {
     io.emit('update user list', getUserList());
   });
 
-  // 3. チャット初期接続・登録
+  // 3. チャット初期接続
   socket.on('register user', (username) => {
     socket.username = username;
     socket.join('general');
 
-    socket.emit('update channel list', channels);
+    socket.emit('update channel list', getSortedChannels());
     socket.emit('load history', chatHistory);
     io.emit('update user list', getUserList());
   });
@@ -125,35 +155,40 @@ io.on('connection', (socket) => {
     socket.join(roomName);
   });
 
-  // 5. メッセージ送信
+  // 5. メッセージ送信 (テキスト / メディア対応)
   socket.on('chat message', (data) => {
-    const { targetRoom, text, replyTo } = data;
+    const { targetRoom, text, fileData, fileType, replyTo } = data;
     if (!chatHistory[targetRoom]) chatHistory[targetRoom] = [];
 
-    const date = new Date();
-    const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    const timeStr = getFormattedTime();
 
     const newMsg = {
       id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
       user: socket.username || '匿名',
-      text: text,
+      text: text || '',
+      fileData: fileData || null,
+      fileType: fileType || null, // 'image' or 'video'
       time: timeStr,
       targetRoom: targetRoom,
       replyTo: replyTo || null,
-      isEdited: false
+      isEdited: false,
+      isPinned: false // ★固定フラグ
     };
 
     chatHistory[targetRoom].push(newMsg);
     io.to(targetRoom).emit('chat message', newMsg);
   });
 
-  // 6. メッセージ編集
+  // 6. メッセージ編集 (固定メッセージは投稿主であっても編集不可)
   socket.on('edit message', (data) => {
     const { id, newText, targetRoom } = data;
     const history = chatHistory[targetRoom];
     if (history) {
       const msg = history.find(m => m.id === id);
       if (msg) {
+        if (msg.isPinned && socket.username !== 'アルパカ') {
+          return socket.emit('chat error', '固定された投稿は削除・編集できません。');
+        }
         msg.text = newText;
         msg.isEdited = true;
         io.to(targetRoom).emit('edit message', { id, newText, targetRoom });
@@ -161,17 +196,37 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 7. メッセージ削除
+  // 7. メッセージ削除 (固定メッセージは投稿主であっても削除不可)
   socket.on('delete message', (data) => {
     const { id, targetRoom } = data;
     const history = chatHistory[targetRoom];
     if (history) {
-      chatHistory[targetRoom] = history.filter(m => m.id !== id);
-      io.to(targetRoom).emit('delete message', { id, targetRoom });
+      const msg = history.find(m => m.id === id);
+      if (msg) {
+        if (msg.isPinned && socket.username !== 'アルパカ') {
+          return socket.emit('chat error', '固定された投稿は削除・編集できません。');
+        }
+        chatHistory[targetRoom] = history.filter(m => m.id !== id);
+        io.to(targetRoom).emit('delete message', { id, targetRoom });
+      }
     }
   });
 
-  // 8. チャンネル全消去（管理者用）
+  // ★ 8. メッセージ固定 / 固定解除（開発者限定）
+  socket.on('toggle pin message', (data) => {
+    if (socket.username !== 'アルパカ') return;
+    const { id, targetRoom } = data;
+    const history = chatHistory[targetRoom];
+    if (history) {
+      const msg = history.find(m => m.id === id);
+      if (msg) {
+        msg.isPinned = !msg.isPinned;
+        io.to(targetRoom).emit('update pin message', { id, isPinned: msg.isPinned, targetRoom });
+      }
+    }
+  });
+
+  // 9. チャンネル全消去
   socket.on('clear channel', (roomName) => {
     if (socket.username === 'アルパカ') {
       chatHistory[roomName] = [];
@@ -179,27 +234,40 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 9. チャンネル作成
+  // 10. チャンネル作成
   socket.on('create channel', (channelName) => {
     if (channels.includes(channelName)) {
       return socket.emit('channel error', 'そのチャンネル名は既に存在します。');
     }
     channels.push(channelName);
     chatHistory[channelName] = [];
-    io.emit('update channel list', channels);
+    io.emit('update channel list', getSortedChannels());
   });
 
-  // 10. チャンネル削除（管理者用）
+  // 11. チャンネル削除
   socket.on('delete channel', (channelName) => {
     if (socket.username === 'アルパカ') {
       channels = channels.filter(c => c !== channelName);
+      pinnedChannels = pinnedChannels.filter(c => c !== channelName);
       delete chatHistory[channelName];
-      io.emit('update channel list', channels);
+      io.emit('update channel list', getSortedChannels());
       io.emit('channel deleted', channelName);
     }
   });
 
-  // 11. グループDM作成
+  // ★ 12. チャンネル固定 / 解除（開発者限定）
+  socket.on('toggle pin channel', (channelName) => {
+    if (socket.username === 'アルパカ') {
+      if (pinnedChannels.includes(channelName)) {
+        pinnedChannels = pinnedChannels.filter(c => c !== channelName);
+      } else {
+        pinnedChannels.push(channelName);
+      }
+      io.emit('update channel list', getSortedChannels());
+    }
+  });
+
+  // 13. グループDM作成
   socket.on('create group dm', (members) => {
     members.sort();
     const groupRoom = '_GROUP_DM_' + members.join('_');
@@ -209,13 +277,13 @@ io.on('connection', (socket) => {
     socket.emit('group dm created', groupRoom);
   });
 
-  // 12. プロフィール取得
+  // 14. プロフィール取得
   socket.on('get user profile', (username) => {
     const prof = profiles[username] || { bio: '' };
     socket.emit('user profile result', prof);
   });
 
-  // 13. プロフィール更新
+  // 15. プロフィール更新
   socket.on('update profile bio', (bioText) => {
     if (!socket.username) return;
     if (!profiles[socket.username]) profiles[socket.username] = {};
@@ -223,7 +291,7 @@ io.on('connection', (socket) => {
     socket.emit('profile bio updated', bioText);
   });
 
-  // 14. 管理者用：ユーザー＆パスワード一覧取得
+  // 16. 管理者用：ユーザー一覧取得
   socket.on('get admin user list', () => {
     if (socket.username === 'アルパカ') {
       const userObj = {};
@@ -234,7 +302,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 15. 管理者用：DM一覧取得
+  // 17. 管理者用：DM一覧取得
   socket.on('get admin dm list', () => {
     if (socket.username === 'アルパカ') {
       const dmRooms = [];
@@ -257,12 +325,11 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 16. 管理者用：アカウントBAN
+  // 18. 管理者用：アカウントBAN
   socket.on('admin ban user', (targetUser) => {
     if (socket.username === 'アルパカ') {
       if (!bannedUsers.includes(targetUser)) bannedUsers.push(targetUser);
 
-      // 該当ユーザーを即時キック
       for (const [id, s] of io.sockets.sockets) {
         if (s.username === targetUser) {
           s.emit('banned notification', '管理者によりアカウントがBANされました。');
@@ -273,20 +340,16 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 17. 管理者用：★ IP BAN ★
+  // 19. 管理者用：IP BAN
   socket.on('admin ip ban user', (targetUser) => {
     if (socket.username === 'アルパカ') {
       const targetIp = userIPs[targetUser];
 
-      // アカウントBANリストに追加
       if (!bannedUsers.includes(targetUser)) bannedUsers.push(targetUser);
-
-      // IP BANリストに追加
       if (targetIp && !bannedIPs.includes(targetIp)) {
         bannedIPs.push(targetIp);
       }
 
-      // 対象ユーザー、および同じIPから接続している接続を全強制切断
       for (const [id, s] of io.sockets.sockets) {
         const sIp = getClientIp(s);
         if (s.username === targetUser || (targetIp && sIp === targetIp)) {
@@ -298,7 +361,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 18. 管理者用：BAN解除（IP BAN含む）
+  // 20. 管理者用：BAN解除
   socket.on('admin unban user', (targetUser) => {
     if (socket.username === 'アルパカ') {
       bannedUsers = bannedUsers.filter(u => u !== targetUser);
@@ -311,7 +374,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 19. 接続切断
+  // 21. 接続切断
   socket.on('disconnect', () => {
     if (socket.username && users[socket.username]) {
       users[socket.username].lastSeen = new Date();
