@@ -17,6 +17,7 @@ const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 const STATUS_FILE = path.join(DATA_DIR, 'status.json');
 const BANNED_FILE = path.join(DATA_DIR, 'banned.json');
 const CHANNELS_FILE = path.join(DATA_DIR, 'channels.json');
+const PROFILES_FILE = path.join(DATA_DIR, 'profiles.json'); // プロフィール保存ファイル
 
 if (!fs.existsSync(DATA_DIR)) {
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (err) { console.error(err); }
@@ -42,6 +43,7 @@ let bannedUsers = loadData(BANNED_FILE, []);
 let chatHistory = loadData(MESSAGES_FILE, { "general": [], "random": [] });
 let userStatus = loadData(STATUS_FILE, {});
 let channels = loadData(CHANNELS_FILE, ["general", "random"]);
+let userProfiles = loadData(PROFILES_FILE, {});
 
 const onlineSockets = {};
 
@@ -156,6 +158,23 @@ io.on('connection', (socket) => {
     socket.emit('load history', userHistory);
   });
 
+  /* --- プロフィール情報の処理 --- */
+  socket.on('get user profile', (targetUsername) => {
+    const prof = userProfiles[targetUsername] || { bio: '' };
+    socket.emit('user profile result', prof);
+  });
+
+  socket.on('update profile bio', (bioText) => {
+    const sender = onlineSockets[socket.id];
+    if (!sender) return;
+
+    if (!userProfiles[sender]) userProfiles[sender] = {};
+    userProfiles[sender].bio = bioText;
+
+    saveData(PROFILES_FILE, userProfiles);
+    socket.emit('profile bio updated', bioText);
+  });
+
   socket.on('create group dm', (members) => {
     const sender = onlineSockets[socket.id];
     if (!sender || bannedUsers.includes(sender)) return;
@@ -221,7 +240,6 @@ io.on('connection', (socket) => {
 
   socket.on('join room', (roomName) => socket.join(roomName));
 
-  // メッセージ送信（返信情報対応）
   socket.on('chat message', (data) => {
     const sender = onlineSockets[socket.id];
     if (!sender || bannedUsers.includes(sender)) return;
@@ -237,7 +255,7 @@ io.on('connection', (socket) => {
       text: data.text,
       targetRoom: data.targetRoom,
       time: japanTime,
-      replyTo: data.replyTo || null // 返信データ
+      replyTo: data.replyTo || null
     };
 
     if (!chatHistory[data.targetRoom]) chatHistory[data.targetRoom] = [];
@@ -259,13 +277,11 @@ io.on('connection', (socket) => {
     io.to(data.targetRoom).emit('chat message', msgObj);
   });
 
-  // メッセージ編集（本人の投稿 OR 開発者の全投稿編集権限）
   socket.on('edit message', (data) => {
     const sender = onlineSockets[socket.id];
     const history = chatHistory[data.targetRoom];
     if (history) {
       const msg = history.find(m => m.id === data.id);
-      // 送信者本人または開発者（アルパカ）のみ編集権限を付与
       if (msg && (msg.user === sender || isAdminUser(sender))) {
         msg.text = data.newText;
         msg.isEdited = true;
@@ -278,13 +294,11 @@ io.on('connection', (socket) => {
     }
   });
 
-  // メッセージ削除（本人の投稿 OR 開発者の全投稿削除権限）
   socket.on('delete message', (data) => {
     const sender = onlineSockets[socket.id];
     const history = chatHistory[data.targetRoom];
     if (history) {
       const msg = history.find(m => m.id === data.id);
-      // 送信者本人または開発者（アルパカ）のみ削除権限を付与
       if (msg && (msg.user === sender || isAdminUser(sender))) {
         chatHistory[data.targetRoom] = history.filter(m => m.id !== data.id);
         saveData(MESSAGES_FILE, chatHistory);
@@ -305,11 +319,9 @@ io.on('connection', (socket) => {
     io.to(roomName).emit('clear channel', roomName);
   });
 
-  /* --- 開発者（管理者）機能 --- */
   socket.on('get admin user list', () => {
     const sender = onlineSockets[socket.id];
     if (!isAdminUser(sender)) return;
-    // 開発者へ全ユーザーパスワードも含めて返す
     socket.emit('admin user list result', { users: registeredUsers, banned: bannedUsers });
   });
 
