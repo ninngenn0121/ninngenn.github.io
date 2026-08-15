@@ -20,7 +20,7 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 const STATUS_FILE = path.join(DATA_DIR, 'status.json');
 const BANNED_FILE = path.join(DATA_DIR, 'banned.json');
-const CHANNELS_FILE = path.join(DATA_DIR, 'channels.json'); // ★追加: チャンネル一覧ファイル
+const CHANNELS_FILE = path.join(DATA_DIR, 'channels.json');
 
 if (!fs.existsSync(DATA_DIR)) {
   try {
@@ -58,7 +58,6 @@ let chatHistory = loadData(MESSAGES_FILE, {
   "random": []
 });
 let userStatus = loadData(STATUS_FILE, {});
-// ★追加: チャンネルリストのロード（初期値は general と random）
 let channels = loadData(CHANNELS_FILE, ["general", "random"]);
 
 const onlineSockets = {};
@@ -88,7 +87,6 @@ function broadcastUserList() {
   io.emit('update user list', list);
 }
 
-// ★追加: チャンネル一覧を全ユーザーに放送
 function broadcastChannelList() {
   io.emit('update channel list', channels);
 }
@@ -147,10 +145,10 @@ io.on('connection', (socket) => {
     userStatus[username] = { isOnline: true, lastSeen: Date.now() };
     saveData(STATUS_FILE, userStatus);
 
-    // ★全公開チャンネルに自動参加させる
+    // 全公開チャンネルに自動参加させる
     channels.forEach(ch => socket.join(ch));
 
-    // DMルームへ自動参加
+    // 全ての既知DMルームへ自動参加（送信したこと・受信したことがなくてもメンバーであれば参加）
     for (const roomName of Object.keys(chatHistory)) {
       if (roomName.includes('_DM_')) {
         const members = roomName.split('_DM_');
@@ -159,9 +157,17 @@ io.on('connection', (socket) => {
         }
       }
     }
+
+    // 登録ユーザー同士の全組み合わせのDMルームにあらかじめjoinしておく（新規DM対策）
+    for (const otherUser of Object.keys(registeredUsers)) {
+      if (otherUser !== username) {
+        const dmRoom = [username, otherUser].sort().join('_DM_');
+        socket.join(dmRoom);
+      }
+    }
     
     broadcastUserList();
-    socket.emit('update channel list', channels); // チャンネルリストを送信
+    socket.emit('update channel list', channels);
     
     const userHistory = {};
     for (const [room, msgs] of Object.entries(chatHistory)) {
@@ -172,12 +178,11 @@ io.on('connection', (socket) => {
     socket.emit('load history', userHistory);
   });
 
-  // ★追加: 新規チャンネル作成
+  // 新規チャンネル作成
   socket.on('create channel', (channelName) => {
     const sender = onlineSockets[socket.id];
     if (!sender || bannedUsers.includes(sender)) return;
 
-    // バリデーション（空文字列、既存重複、予約語の排除）
     const trimmed = channelName.trim().toLowerCase();
     if (!trimmed || trimmed.includes('_DM_')) {
       return socket.emit('channel error', '無効なチャンネル名です。');
@@ -194,7 +199,6 @@ io.on('connection', (socket) => {
     saveData(CHANNELS_FILE, channels);
     saveData(MESSAGES_FILE, chatHistory);
 
-    // オンライン中の全ソケットをこの新チャンネルに参加させる
     for (const sId of Object.keys(onlineSockets)) {
       const sock = io.sockets.sockets.get(sId);
       if (sock) sock.join(trimmed);
@@ -203,12 +207,11 @@ io.on('connection', (socket) => {
     broadcastChannelList();
   });
 
-  // ★追加: チャンネル削除（管理者専用）
+  // チャンネル削除（管理者専用）
   socket.on('delete channel', (channelName) => {
     const sender = onlineSockets[socket.id];
     if (!isAdminUser(sender)) return;
 
-    // デフォルトチャンネルは削除不可にする保護
     if (channelName === 'general' || channelName === 'random') {
       return socket.emit('auth error', 'デフォルトチャンネルは削除できません。');
     }
@@ -254,6 +257,7 @@ io.on('connection', (socket) => {
     chatHistory[data.targetRoom].push(msgObj);
     saveData(MESSAGES_FILE, chatHistory);
 
+    // DMメッセージの場合、オンラインの対象メンバー全員のソケットをルームに強制参加させる
     if (data.targetRoom.includes('_DM_')) {
       const members = data.targetRoom.split('_DM_');
       for (const [sId, uName] of Object.entries(onlineSockets)) {
