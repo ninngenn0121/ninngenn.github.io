@@ -143,10 +143,7 @@
     .user-select-list { max-height: 200px; overflow-y: auto; margin: 12px 0; background: #36393f; padding: 10px; border-radius: 4px; }
     .user-select-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; }
 
-    /* プロフィールカードスタイル */
-    .profile-card-header {
-      display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
-    }
+    .profile-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
     .profile-avatar {
       width: 50px; height: 50px; border-radius: 50%; background: #5865f2;
       display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; color: white;
@@ -192,16 +189,20 @@
       </div>
       <ul class="item-list" id="channel-list"></ul>
 
+      <!-- 作成された1対1のDM表示欄を追加 -->
+      <div class="section-title"><span>ダイレクトメッセージ</span></div>
+      <ul class="item-list" id="active-dm-list"></ul>
+
       <div class="section-title">
         <span>グループDM</span>
         <button class="add-btn" onclick="openGroupDmModal()" title="グループDMを作成">+</button>
       </div>
       <ul class="item-list" id="group-dm-list"></ul>
 
-      <div class="section-title"><span>オンライン</span></div>
+      <div class="section-title"><span>オンラインユーザー</span></div>
       <ul class="item-list" id="online-dm-list"></ul>
 
-      <div class="section-title"><span>オフライン</span></div>
+      <div class="section-title"><span>オフラインユーザー</span></div>
       <ul class="item-list" id="offline-dm-list"></ul>
     </div>
 
@@ -216,7 +217,6 @@
 
       <div id="messages-container"></div>
 
-      <!-- 返信プレビュー表示 -->
       <div id="reply-bar">
         <span id="reply-text-preview"></span>
         <button onclick="cancelReply()">✕</button>
@@ -243,9 +243,7 @@
       </div>
 
       <h4>自己紹介</h4>
-      <!--閲覧用-->
       <div id="prof-bio-view" class="profile-bio-box">自己紹介が設定されていません。</div>
-      <!--編集用-->
       <textarea id="prof-bio-edit" class="profile-bio-textarea" style="display: none;" placeholder="自己紹介を入力してください..."></textarea>
 
       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;">
@@ -274,7 +272,6 @@
   <div id="admin-modal" class="modal">
     <div class="modal-content">
       <h3>👑 管理者パネル</h3>
-      
       <h4>ユーザー管理 & パスワード閲覧</h4>
       <table class="modal-table">
         <thead>
@@ -299,7 +296,6 @@
         </thead>
         <tbody id="admin-dm-table"></tbody>
       </table>
-
       <button class="modal-close" style="float: right;" onclick="closeAdminModal()">閉じる</button>
     </div>
   </div>
@@ -330,11 +326,9 @@
               updateNotifBtn();
               playNotificationSound();
             } else {
-              alert("通知がブラウザで許可されていません。");
+              alert("通知が許可されていません。");
             }
           });
-        } else {
-          alert("お使いのブラウザはWeb通知に対応していません。");
         }
       } else {
         notificationsEnabled = false;
@@ -344,13 +338,8 @@
 
     function updateNotifBtn() {
       const btn = document.getElementById('notif-toggle-btn');
-      if (notificationsEnabled) {
-        btn.textContent = '🔔 通知: ON';
-        btn.classList.add('active');
-      } else {
-        btn.textContent = '🔔 通知: OFF';
-        btn.classList.remove('active');
-      }
+      btn.textContent = notificationsEnabled ? '🔔 通知: ON' : '🔔 通知: OFF';
+      btn.classList.toggle('active', notificationsEnabled);
     }
 
     function playNotificationSound() {
@@ -403,7 +392,6 @@
       const password = document.getElementById('auth-password').value.trim();
 
       if (!username || !password) return alert('ユーザー名とパスワードを入力してください。');
-
       const eventName = isRegisterMode ? 'register account' : 'login account';
       socket.emit(eventName, { username, password });
     }
@@ -489,14 +477,17 @@
     }
 
     function renderUserLists() {
+      const activeDmListEl = document.getElementById('active-dm-list');
       const onlineListEl = document.getElementById('online-dm-list');
       const offlineListEl = document.getElementById('offline-dm-list');
       const groupListEl = document.getElementById('group-dm-list');
       
+      activeDmListEl.innerHTML = '';
       onlineListEl.innerHTML = '';
       offlineListEl.innerHTML = '';
       groupListEl.innerHTML = '';
 
+      // 1. 作成・既存のDMおよびグループDMを描画
       for (const roomName of Object.keys(chatHistory)) {
         if (roomName.includes('_GROUP_DM_')) {
           const members = roomName.replace('_GROUP_DM_', '').split('_');
@@ -518,16 +509,48 @@
             li.onclick = () => switchRoom(roomName);
             groupListEl.appendChild(li);
           }
+        } else if (roomName.includes('_DM_')) {
+          const members = roomName.split('_DM_');
+          if (members.includes(currentUser) || currentUserIsAdmin) {
+            // 自分以外の相手名を取得
+            const otherUser = members.find(m => m !== currentUser) || currentUser;
+
+            const li = document.createElement('li');
+            if (roomName === currentRoom) li.classList.add('active');
+
+            const isOnline = onlineUserList[otherUser]?.isOnline;
+            const dot = document.createElement('span');
+            dot.className = `status-dot ${isOnline ? 'online' : 'offline'}`;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = `@ ${otherUser}`;
+
+            const leftBox = document.createElement('div');
+            leftBox.style.display = 'flex';
+            leftBox.style.alignItems = 'center';
+            leftBox.appendChild(dot);
+            leftBox.appendChild(nameSpan);
+
+            li.appendChild(leftBox);
+
+            if (unreadCounts[roomName]) {
+              const badge = document.createElement('span');
+              badge.className = 'badge';
+              badge.textContent = unreadCounts[roomName];
+              li.appendChild(badge);
+            }
+
+            li.onclick = () => switchRoom(roomName);
+            activeDmListEl.appendChild(li);
+          }
         }
       }
 
+      // 2. ユーザー一覧（タップでプロフィールモーダルを開く）
       for (const [uname, info] of Object.entries(onlineUserList)) {
         if (uname === currentUser) continue;
 
         const li = document.createElement('li');
-        const dmRoom = getDmRoomName(currentUser, uname);
-        if (dmRoom === currentRoom) li.classList.add('active');
-
         const userContainer = document.createElement('div');
         userContainer.style.display = 'flex';
         userContainer.style.alignItems = 'center';
@@ -561,14 +584,6 @@
         userContainer.appendChild(textGroup);
         li.appendChild(userContainer);
 
-        if (unreadCounts[dmRoom]) {
-          const badge = document.createElement('span');
-          badge.className = 'badge';
-          badge.textContent = unreadCounts[dmRoom];
-          li.appendChild(badge);
-        }
-
-        // タップ/クリックでプロフィールモーダルを表示
         li.onclick = () => openProfileModal(uname);
 
         if (info.isOnline) onlineListEl.appendChild(li);
@@ -597,7 +612,6 @@
 
       toggleBioEdit(false);
 
-      // プロフィールデータ取得
       socket.emit('get user profile', username);
       document.getElementById('profile-modal').style.display = 'flex';
     }
@@ -674,7 +688,8 @@
         document.getElementById('current-room-title').textContent = `👨‍👩‍👧‍👦 ${members.join(', ')}`;
       } else if (roomName.includes('_DM_')) {
         const members = roomName.split('_DM_');
-        document.getElementById('current-room-title').textContent = `@ ${members.join(' ↔ ')}`;
+        const otherUser = members.find(m => m !== currentUser) || currentUser;
+        document.getElementById('current-room-title').textContent = `@ ${otherUser}`;
       } else {
         document.getElementById('current-room-title').textContent = `# ${roomName}`;
       }
@@ -781,8 +796,9 @@
         renderMessages();
       } else {
         unreadCounts[msgObj.targetRoom] = (unreadCounts[msgObj.targetRoom] || 0) + 1;
-        renderUserLists();
       }
+
+      renderUserLists();
 
       if (msgObj.user !== currentUser) triggerNotification(msgObj);
     });
@@ -809,7 +825,7 @@
         const userSpan = document.createElement('span');
         userSpan.className = 'message-user';
         userSpan.textContent = msg.user;
-        userSpan.onclick = () => openProfileModal(msg.user); // 投稿者名をタップでプロフィール表示
+        userSpan.onclick = () => openProfileModal(msg.user);
 
         const timeSpan = document.createElement('span');
         timeSpan.className = 'message-time';
