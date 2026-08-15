@@ -5,11 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>チャットアプリ</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Helvetica Neue', Arial, sans-serif;
       background-color: #f0f2f5;
@@ -19,372 +15,129 @@
       align-items: center;
     }
 
-    /* ログイン・登録画面 */
     #auth-screen {
-      background: white;
-      padding: 30px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      width: 100%;
-      max-width: 360px;
-      text-align: center;
+      background: white; padding: 30px; border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 360px; text-align: center;
     }
-    #auth-screen h2 {
-      margin-bottom: 20px;
-      color: #333;
-    }
+    #auth-screen h2 { margin-bottom: 20px; color: #333; }
     #auth-screen input {
-      width: 100%;
-      padding: 10px;
-      margin-bottom: 12px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      font-size: 14px;
+      width: 100%; padding: 10px; margin-bottom: 12px;
+      border: 1px solid #ccc; border-radius: 4px; font-size: 14px;
     }
     #auth-screen button {
-      width: 100%;
-      padding: 10px;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      font-size: 16px;
-      cursor: pointer;
-      margin-bottom: 8px;
+      width: 100%; padding: 10px; background-color: #007bff; color: white;
+      border: none; border-radius: 4px; font-size: 16px; cursor: pointer; margin-bottom: 8px;
     }
-    #auth-screen button:hover {
-      background-color: #0056b3;
-    }
-    .toggle-auth {
-      color: #007bff;
-      cursor: pointer;
-      font-size: 12px;
-      text-decoration: underline;
-    }
+    #auth-screen button:hover { background-color: #0056b3; }
+    .toggle-auth { color: #007bff; cursor: pointer; font-size: 12px; text-decoration: underline; }
 
-    /* メインチャット画面 */
     #app-container {
-      display: flex;
-      width: 95vw;
-      height: 90vh;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      overflow: hidden;
+      display: flex; width: 95vw; height: 90vh; background: white;
+      border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); overflow: hidden;
     }
 
-    /* サイドバー */
     #sidebar {
-      width: 280px;
-      background-color: #2f3136;
-      color: #dcddde;
-      display: flex;
-      flex-direction: column;
-      border-right: 1px solid #202225;
-      overflow-y: auto;
+      width: 280px; background-color: #2f3136; color: #dcddde;
+      display: flex; flex-direction: column; border-right: 1px solid #202225; overflow-y: auto;
     }
     .sidebar-header {
-      padding: 16px;
-      background: #202225;
-      font-weight: bold;
-      color: #fff;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 10;
+      padding: 16px; background: #202225; font-weight: bold; color: #fff;
+      display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10;
     }
     .section-title {
-      padding: 12px 16px 4px;
-      font-size: 11px;
-      font-weight: bold;
-      color: #8e9297;
-      text-transform: uppercase;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-top: 8px;
+      padding: 12px 16px 4px; font-size: 11px; font-weight: bold; color: #8e9297;
+      text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; margin-top: 8px;
     }
-    .add-btn {
-      background: none;
-      border: none;
-      color: #8e9297;
-      cursor: pointer;
-      font-size: 16px;
-    }
-    .add-btn:hover {
-      color: #fff;
-    }
-    .item-list {
-      list-style: none;
-      padding: 0 8px;
-    }
+    .add-btn { background: none; border: none; color: #8e9297; cursor: pointer; font-size: 16px; }
+    .add-btn:hover { color: #fff; }
+    .item-list { list-style: none; padding: 0 8px; }
     .item-list li {
-      padding: 8px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      margin-bottom: 2px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 13px;
+      padding: 8px 12px; border-radius: 4px; cursor: pointer; margin-bottom: 2px;
+      display: flex; justify-content: space-between; align-items: center; font-size: 13px;
     }
-    .item-list li:hover {
-      background-color: #393c43;
-      color: #fff;
-    }
-    .item-list li.active {
-      background-color: #42464d;
-      color: #fff;
-    }
-    .user-info-text {
-      display: flex;
-      flex-direction: column;
-    }
-    .offline-time {
-      font-size: 10px;
-      color: #72767d;
-      margin-top: 2px;
-    }
-    .badge {
-      background-color: #f04747;
-      color: white;
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 10px;
-    }
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      display: inline-block;
-      margin-right: 8px;
-      flex-shrink: 0;
-    }
+    .item-list li:hover { background-color: #393c43; color: #fff; }
+    .item-list li.active { background-color: #42464d; color: #fff; }
+    .user-info-text { display: flex; flex-direction: column; }
+    .offline-time { font-size: 10px; color: #72767d; margin-top: 2px; }
+    .badge { background-color: #f04747; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; flex-shrink: 0; }
     .online { background-color: #43b581; }
     .offline { background-color: #747f8d; }
-    .admin-badge {
-      background: #ff4757;
-      color: #fff;
-      font-size: 10px;
-      padding: 2px 4px;
-      border-radius: 3px;
-      margin-left: 4px;
-    }
+    .admin-badge { background: #ff4757; color: #fff; font-size: 10px; padding: 2px 4px; border-radius: 3px; margin-left: 4px; }
 
-    /* メインチャットエリア */
-    #main-chat {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      background: #36393f;
-      color: #dcddde;
-    }
+    #main-chat { flex: 1; display: flex; flex-direction: column; background: #36393f; color: #dcddde; }
     .chat-header {
-      padding: 16px;
-      background: #36393f;
-      border-bottom: 1px solid #2f3136;
-      font-size: 18px;
-      font-weight: bold;
-      color: #fff;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      padding: 16px; background: #36393f; border-bottom: 1px solid #2f3136;
+      font-size: 18px; font-weight: bold; color: #fff; display: flex; justify-content: space-between; align-items: center;
     }
-    .header-controls {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .notif-btn {
-      background: #4f545c;
-      color: white;
-      border: none;
-      padding: 4px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-    }
-    .notif-btn.active {
-      background: #43b581;
-    }
-    #messages-container {
-      flex: 1;
-      padding: 16px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
+    .header-controls { display: flex; align-items: center; gap: 10px; }
+    .notif-btn { background: #4f545c; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .notif-btn.active { background: #43b581; }
+    
+    #messages-container { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
     .message-item {
-      display: flex;
-      flex-direction: column;
-      background: #2f3136;
-      padding: 10px 14px;
-      border-radius: 6px;
-      max-width: 80%;
-      position: relative;
+      display: flex; flex-direction: column; background: #2f3136;
+      padding: 10px 14px; border-radius: 6px; max-width: 80%; position: relative;
     }
-    .message-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 4px;
-    }
-    .message-user {
-      font-weight: bold;
-      color: #fff;
-      font-size: 14px;
-    }
-    .message-time {
-      font-size: 11px;
-      color: #72767d;
-    }
-    .message-text {
-      font-size: 14px;
-      word-break: break-all;
-      color: #dcddde;
-    }
-    .edited-tag {
-      font-size: 10px;
-      color: #72767d;
-      margin-left: 4px;
-    }
-    .msg-actions {
-      display: none;
-      position: absolute;
-      right: 10px;
-      top: 10px;
-      gap: 6px;
-    }
-    .message-item:hover .msg-actions {
-      display: flex;
-    }
-    .msg-btn {
-      background: #202225;
-      border: none;
-      color: #b9bbbe;
-      padding: 2px 6px;
-      font-size: 11px;
-      border-radius: 3px;
-      cursor: pointer;
-    }
-    .msg-btn:hover {
-      color: #fff;
-      background: #4f545c;
+    
+    /* 返信表示スタイル */
+    .reply-quote {
+      background: #202225; border-left: 3px solid #5865f2;
+      padding: 4px 8px; font-size: 12px; border-radius: 2px; margin-bottom: 6px; color: #b9bbbe;
     }
 
-    /* 入力エリア */
-    .input-area {
-      padding: 16px;
-      background: #36393f;
+    .message-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .message-user { font-weight: bold; color: #fff; font-size: 14px; }
+    .message-time { font-size: 11px; color: #72767d; }
+    .message-text { font-size: 14px; word-break: break-all; color: #dcddde; }
+    .edited-tag { font-size: 10px; color: #72767d; margin-left: 4px; }
+    .msg-actions { display: none; position: absolute; right: 10px; top: 10px; gap: 6px; }
+    .message-item:hover .msg-actions { display: flex; }
+    .msg-btn {
+      background: #202225; border: none; color: #b9bbbe;
+      padding: 2px 6px; font-size: 11px; border-radius: 3px; cursor: pointer;
     }
-    .input-box {
-      display: flex;
-      background: #40444b;
-      border-radius: 8px;
-      padding: 0 12px;
+    .msg-btn:hover { color: #fff; background: #4f545c; }
+
+    /* 返信プレビューバー */
+    #reply-bar {
+      display: none; background: #2f3136; padding: 6px 12px;
+      border-left: 4px solid #5865f2; font-size: 12px;
+      justify-content: space-between; align-items: center;
     }
+    #reply-bar button { background: none; border: none; color: #f04747; cursor: pointer; font-size: 14px; }
+
+    .input-area { padding: 16px; background: #36393f; }
+    .input-box { display: flex; background: #40444b; border-radius: 8px; padding: 0 12px; }
     .input-box input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: #fff;
-      padding: 12px 0;
-      font-size: 14px;
-      outline: none;
+      flex: 1; background: transparent; border: none;
+      color: #fff; padding: 12px 0; font-size: 14px; outline: none;
     }
     .input-box button {
-      background: #5865f2;
-      color: white;
-      border: none;
-      padding: 0 16px;
-      margin: 6px 0;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: bold;
+      background: #5865f2; color: white; border: none;
+      padding: 0 16px; margin: 6px 0; border-radius: 4px; cursor: pointer; font-weight: bold;
     }
-    .input-box button:hover {
-      background: #4752c4;
-    }
+    .input-box button:hover { background: #4752c4; }
 
-    /* モーダル共通 */
     .modal {
-      display: none;
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.7);
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;
     }
     .modal-content {
-      background: #2f3136;
-      color: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      width: 500px;
-      max-width: 90%;
-      max-height: 80vh;
-      overflow-y: auto;
+      background: #2f3136; color: #fff; padding: 20px; border-radius: 8px;
+      width: 550px; max-width: 90%; max-height: 80vh; overflow-y: auto;
     }
-    .modal-content h3 {
-      margin-bottom: 12px;
-      border-bottom: 1px solid #40444b;
-      padding-bottom: 8px;
-    }
-    .modal-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 16px;
-    }
-    .modal-table th, .modal-table td {
-      border: 1px solid #40444b;
-      padding: 8px;
-      text-align: left;
-      font-size: 13px;
-    }
-    .modal-close {
-      background: #747f8d;
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 4px;
-      cursor: pointer;
-      float: right;
-    }
+    .modal-content h3 { margin-bottom: 12px; border-bottom: 1px solid #40444b; padding-bottom: 8px; }
+    .modal-content h4 { margin: 12px 0 6px; font-size: 14px; color: #b9bbbe; }
+    .modal-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    .modal-table th, .modal-table td { border: 1px solid #40444b; padding: 8px; text-align: left; font-size: 13px; }
+    .modal-close { background: #747f8d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; float: right; }
 
-    .del-btn {
-      background: #f04747;
-      color: white;
-      border: none;
-      padding: 2px 6px;
-      border-radius: 3px;
-      cursor: pointer;
-      font-size: 11px;
-    }
-    .del-btn:hover {
-      background: #d83c3c;
-    }
+    .del-btn { background: #f04747; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; }
+    .del-btn:hover { background: #d83c3c; }
 
-    /* グループDM作成チェックボックス一覧 */
-    .user-select-list {
-      max-height: 200px;
-      overflow-y: auto;
-      margin: 12px 0;
-      background: #36393f;
-      padding: 10px;
-      border-radius: 4px;
-    }
-    .user-select-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 6px 0;
-      font-size: 14px;
-    }
+    .user-select-list { max-height: 200px; overflow-y: auto; margin: 12px 0; background: #36393f; padding: 10px; border-radius: 4px; }
+    .user-select-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -400,41 +153,31 @@
 
   <!-- メインチャット画面 -->
   <div id="app-container" style="display: none;">
-    <!-- サイドバー -->
     <div id="sidebar">
       <div class="sidebar-header">
         <span id="display-user-name">ユーザー名</span>
         <button id="admin-panel-btn" style="display:none; background:#ff4757; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:12px;" onclick="openAdminModal()">管理画面</button>
       </div>
 
-      <!-- チャンネルエリア -->
       <div class="section-title">
         <span>チャンネル</span>
         <button class="add-btn" onclick="createNewChannel()" title="チャンネルを追加">+</button>
       </div>
       <ul class="item-list" id="channel-list"></ul>
 
-      <!-- グループDMエリア -->
       <div class="section-title">
         <span>グループDM</span>
         <button class="add-btn" onclick="openGroupDmModal()" title="グループDMを作成">+</button>
       </div>
       <ul class="item-list" id="group-dm-list"></ul>
 
-      <!-- オンラインユーザー (DM) エリア -->
-      <div class="section-title">
-        <span>オンライン</span>
-      </div>
+      <div class="section-title"><span>オンライン</span></div>
       <ul class="item-list" id="online-dm-list"></ul>
 
-      <!-- オフラインユーザー (DM) エリア -->
-      <div class="section-title">
-        <span>オフライン</span>
-      </div>
+      <div class="section-title"><span>オフライン</span></div>
       <ul class="item-list" id="offline-dm-list"></ul>
     </div>
 
-    <!-- チャットメインエリア -->
     <div id="main-chat">
       <div class="chat-header">
         <span id="current-room-title"># general</span>
@@ -445,6 +188,12 @@
       </div>
 
       <div id="messages-container"></div>
+
+      <!-- 返信プレビュー表示 -->
+      <div id="reply-bar">
+        <span id="reply-text-preview"></span>
+        <button onclick="cancelReply()">✕</button>
+      </div>
 
       <div class="input-area">
         <div class="input-box">
@@ -459,10 +208,8 @@
   <div id="group-dm-modal" class="modal">
     <div class="modal-content">
       <h3>👥 グループDMを作成</h3>
-      <p style="font-size: 12px; color: #b9bbbe;">参加させるメンバーを選択してください（あなた自身は自動で含まれます）:</p>
-      
+      <p style="font-size: 12px; color: #b9bbbe;">参加させるメンバーを選択してください:</p>
       <div id="group-user-select-list" class="user-select-list"></div>
-
       <div style="display: flex; justify-content: flex-end; gap: 8px;">
         <button class="modal-close" style="float:none;" onclick="closeGroupDmModal()">キャンセル</button>
         <button style="background: #5865f2; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;" onclick="createGroupDm()">作成する</button>
@@ -475,11 +222,12 @@
     <div class="modal-content">
       <h3>👑 管理者パネル</h3>
       
-      <h4>ユーザー一覧 & BAN管理</h4>
+      <h4>ユーザー管理 & パスワード閲覧</h4>
       <table class="modal-table">
         <thead>
           <tr>
             <th>ユーザー名</th>
+            <th>パスワード</th>
             <th>ステータス</th>
             <th>操作</th>
           </tr>
@@ -516,8 +264,8 @@
     let unreadCounts = {};
     let onlineUserList = {};
 
-    // 通知設定
     let notificationsEnabled = false;
+    let replyingToMsg = null; // 現在返信中のメッセージ情報
 
     function toggleNotifications() {
       if (!notificationsEnabled) {
@@ -526,7 +274,7 @@
             if (permission === "granted") {
               notificationsEnabled = true;
               updateNotifBtn();
-              playNotificationSound(); // テスト音
+              playNotificationSound();
             } else {
               alert("通知がブラウザで許可されていません。");
             }
@@ -551,7 +299,6 @@
       }
     }
 
-    // Web Audio API を用いた効果音生成
     function playNotificationSound() {
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -559,8 +306,8 @@
         const gain = audioCtx.createGain();
 
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1); // A5
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1);
 
         gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
@@ -570,25 +317,18 @@
 
         osc.start();
         osc.stop(audioCtx.currentTime + 0.3);
-      } catch (e) {
-        console.error("音声の再生に失敗しました", e);
-      }
+      } catch (e) { console.error(e); }
     }
 
     function triggerNotification(msgObj) {
       if (!notificationsEnabled) return;
-
       playNotificationSound();
 
       if (Notification.permission === "granted") {
         let roomLabel = msgObj.targetRoom;
-        if (roomLabel.includes('_GROUP_DM_')) {
-          roomLabel = 'グループDM';
-        } else if (roomLabel.includes('_DM_')) {
-          roomLabel = 'ダイレクトメッセージ';
-        } else {
-          roomLabel = `# ${roomLabel}`;
-        }
+        if (roomLabel.includes('_GROUP_DM_')) roomLabel = 'グループDM';
+        else if (roomLabel.includes('_DM_')) roomLabel = 'ダイレクトメッセージ';
+        else roomLabel = `# ${roomLabel}`;
 
         new Notification(`新着メッセージ (${roomLabel})`, {
           body: `${msgObj.user}: ${msgObj.text}`,
@@ -597,7 +337,6 @@
       }
     }
 
-    // 認証モード切り替え
     function toggleAuthMode() {
       isRegisterMode = !isRegisterMode;
       document.getElementById('auth-title').textContent = isRegisterMode ? '新規アカウント登録' : 'ログイン';
@@ -605,20 +344,16 @@
       document.getElementById('auth-toggle-btn').textContent = isRegisterMode ? 'ログインはこちら' : '新規登録はこちら';
     }
 
-    // 認証送信
     function handleAuth() {
       const username = document.getElementById('auth-username').value.trim();
       const password = document.getElementById('auth-password').value.trim();
 
-      if (!username || !password) {
-        return alert('ユーザー名とパスワードを入力してください。');
-      }
+      if (!username || !password) return alert('ユーザー名とパスワードを入力してください。');
 
       const eventName = isRegisterMode ? 'register account' : 'login account';
       socket.emit(eventName, { username, password });
     }
 
-    // 認証成功
     socket.on('auth success', (data) => {
       currentUser = data.username;
       currentUserIsAdmin = data.isAdmin;
@@ -635,20 +370,15 @@
       }
 
       socket.emit('register user', currentUser);
-      
       setInterval(renderUserLists, 60000);
     });
 
-    socket.on('auth error', (msg) => {
-      alert(msg);
-    });
-
+    socket.on('auth error', (msg) => alert(msg));
     socket.on('banned notification', (msg) => {
       alert(msg);
       location.reload();
     });
 
-    // チャンネルリスト描画
     socket.on('update channel list', (channels) => {
       const listEl = document.getElementById('channel-list');
       listEl.innerHTML = '';
@@ -675,7 +405,7 @@
           delBtn.style.marginLeft = '8px';
           delBtn.onclick = (e) => {
             e.stopPropagation();
-            if (confirm(`チャンネル「#${ch}」を完全に削除しますか？`)) {
+            if (confirm(`チャンネル「#${ch}」を削除しますか？`)) {
               socket.emit('delete channel', ch);
             }
           };
@@ -687,7 +417,6 @@
       });
     });
 
-    // ユーザーリスト & 1対1 DMリスト & グループDM描画
     socket.on('update user list', (users) => {
       onlineUserList = users;
       renderUserLists();
@@ -702,8 +431,7 @@
       if (diffMins < 60) return `${diffMins}分前からオフライン`;
       const diffHours = Math.floor(diffMins / 60);
       if (diffHours < 24) return `${diffHours}時間前からオフライン`;
-      const diffDays = Math.floor(diffHours / 24);
-      return `${diffDays}日前からオフライン`;
+      return `${Math.floor(diffHours / 24)}日前からオフライン`;
     }
 
     function renderUserLists() {
@@ -715,7 +443,6 @@
       offlineListEl.innerHTML = '';
       groupListEl.innerHTML = '';
 
-      // グループDMのレンダリング
       for (const roomName of Object.keys(chatHistory)) {
         if (roomName.includes('_GROUP_DM_')) {
           const members = roomName.replace('_GROUP_DM_', '').split('_');
@@ -740,7 +467,6 @@
         }
       }
 
-      // 1対1 DMリストのレンダリング
       for (const [uname, info] of Object.entries(onlineUserList)) {
         if (uname === currentUser) continue;
 
@@ -788,15 +514,10 @@
           li.appendChild(badge);
         }
 
-        li.onclick = () => {
-          switchRoom(dmRoom);
-        };
+        li.onclick = () => switchRoom(dmRoom);
 
-        if (info.isOnline) {
-          onlineListEl.appendChild(li);
-        } else {
-          offlineListEl.appendChild(li);
-        }
+        if (info.isOnline) onlineListEl.appendChild(li);
+        else offlineListEl.appendChild(li);
       }
     }
 
@@ -804,24 +525,21 @@
       return [userA, userB].sort().join('_DM_');
     }
 
-    // 履歴受取
     socket.on('load history', (history) => {
       chatHistory = history;
-
       for (const [room, msgs] of Object.entries(history)) {
         if (room !== currentRoom && msgs.length > 0) {
           unreadCounts[room] = msgs.length;
         }
       }
-
       renderMessages();
       renderUserLists();
     });
 
-    // ルーム切り替え
     function switchRoom(roomName) {
       currentRoom = roomName;
       delete unreadCounts[roomName];
+      cancelReply();
 
       socket.emit('join room', roomName);
 
@@ -835,33 +553,23 @@
         document.getElementById('current-room-title').textContent = `# ${roomName}`;
       }
 
-      if (currentUserIsAdmin) {
-        document.getElementById('clear-channel-btn').style.display = 'block';
-      } else {
-        document.getElementById('clear-channel-btn').style.display = 'none';
-      }
+      document.getElementById('clear-channel-btn').style.display = currentUserIsAdmin ? 'block' : 'none';
 
       renderMessages();
       renderUserLists();
     }
 
-    // 新規チャンネル作成
     function createNewChannel() {
       const channelName = prompt("新しいチャンネル名を入力してください:");
-      if (channelName) {
-        socket.emit('create channel', channelName);
-      }
+      if (channelName) socket.emit('create channel', channelName);
     }
 
-    // グループDM作成モーダル制御
     function openGroupDmModal() {
       const container = document.getElementById('group-user-select-list');
       container.innerHTML = '';
 
       const users = Object.keys(onlineUserList).filter(u => u !== currentUser);
-      if (users.length === 0) {
-        return alert("グループDMを作成できる他のユーザーがいません。");
-      }
+      if (users.length === 0) return alert("グループDMを作成できる他のユーザーがいません。");
 
       users.forEach(uname => {
         const div = document.createElement('div');
@@ -892,24 +600,15 @@
       const checkboxes = document.querySelectorAll('#group-user-select-list input[type="checkbox"]:checked');
       const selectedUsers = Array.from(checkboxes).map(cb => cb.value);
 
-      if (selectedUsers.length < 1) {
-        return alert("少なくとも1人以上のユーザーを選択してください。");
-      }
+      if (selectedUsers.length < 1) return alert("1人以上のユーザーを選択してください。");
 
-      selectedUsers.push(currentUser); // 自分を追加
-
+      selectedUsers.push(currentUser);
       socket.emit('create group dm', selectedUsers);
       closeGroupDmModal();
     }
 
-    socket.on('group dm created', (groupRoom) => {
-      switchRoom(groupRoom);
-    });
-
-    socket.on('channel error', (msg) => {
-      alert(msg);
-    });
-
+    socket.on('group dm created', (groupRoom) => switchRoom(groupRoom));
+    socket.on('channel error', (msg) => alert(msg));
     socket.on('channel deleted', (deletedChannel) => {
       if (currentRoom === deletedChannel) {
         alert(`チャンネル #${deletedChannel} が削除されました。general へ移動します。`);
@@ -917,7 +616,19 @@
       }
     });
 
-    // メッセージ送信
+    /* --- 返信機能 --- */
+    function startReply(msgObj) {
+      replyingToMsg = msgObj;
+      document.getElementById('reply-text-preview').textContent = `返信先 @${msgObj.user}: ${msgObj.text}`;
+      document.getElementById('reply-bar').style.display = 'flex';
+      document.getElementById('message-input').focus();
+    }
+
+    function cancelReply() {
+      replyingToMsg = null;
+      document.getElementById('reply-bar').style.display = 'none';
+    }
+
     function sendMessage() {
       const input = document.getElementById('message-input');
       const text = input.value.trim();
@@ -925,21 +636,20 @@
 
       socket.emit('chat message', {
         targetRoom: currentRoom,
-        text: text
+        text: text,
+        replyTo: replyingToMsg ? { user: replyingToMsg.user, text: replyingToMsg.text } : null
       });
 
       input.value = '';
+      cancelReply();
     }
 
     function handleKeyPress(e) {
       if (e.key === 'Enter') sendMessage();
     }
 
-    // メッセージ受信
     socket.on('chat message', (msgObj) => {
-      if (!chatHistory[msgObj.targetRoom]) {
-        chatHistory[msgObj.targetRoom] = [];
-      }
+      if (!chatHistory[msgObj.targetRoom]) chatHistory[msgObj.targetRoom] = [];
       chatHistory[msgObj.targetRoom].push(msgObj);
 
       if (msgObj.targetRoom === currentRoom) {
@@ -949,13 +659,9 @@
         renderUserLists();
       }
 
-      // 自分が送信したものではない場合、通知を発火
-      if (msgObj.user !== currentUser) {
-        triggerNotification(msgObj);
-      }
+      if (msgObj.user !== currentUser) triggerNotification(msgObj);
     });
 
-    // メッセージ描画
     function renderMessages() {
       const container = document.getElementById('messages-container');
       container.innerHTML = '';
@@ -964,6 +670,14 @@
       msgs.forEach(msg => {
         const item = document.createElement('div');
         item.className = 'message-item';
+
+        // 引用返信の表示
+        if (msg.replyTo) {
+          const replyQuote = document.createElement('div');
+          replyQuote.className = 'reply-quote';
+          replyQuote.textContent = `↩ @${msg.replyTo.user}: ${msg.replyTo.text}`;
+          item.appendChild(replyQuote);
+        }
 
         const header = document.createElement('div');
         header.className = 'message-header';
@@ -993,34 +707,39 @@
         item.appendChild(header);
         item.appendChild(textDiv);
 
-        if (msg.user === currentUser || currentUserIsAdmin) {
-          const actions = document.createElement('div');
-          actions.className = 'msg-actions';
+        // アクションボタン
+        const actions = document.createElement('div');
+        actions.className = 'msg-actions';
 
-          if (msg.user === currentUser) {
-            const editBtn = document.createElement('button');
-            editBtn.className = 'msg-btn';
-            editBtn.textContent = '編集';
-            editBtn.onclick = () => editMessage(msg.id, msg.text);
-            actions.appendChild(editBtn);
-          }
+        // 誰でも使える「返信」ボタン
+        const replyBtn = document.createElement('button');
+        replyBtn.className = 'msg-btn';
+        replyBtn.textContent = '返信';
+        replyBtn.onclick = () => startReply(msg);
+        actions.appendChild(replyBtn);
+
+        // 「自分の投稿」または「開発者（アルパカ）」のみ編集・削除ボタンを表示
+        if (msg.user === currentUser || currentUserIsAdmin) {
+          const editBtn = document.createElement('button');
+          editBtn.className = 'msg-btn';
+          editBtn.textContent = '編集';
+          editBtn.onclick = () => editMessage(msg.id, msg.text);
+          actions.appendChild(editBtn);
 
           const delBtn = document.createElement('button');
           delBtn.className = 'msg-btn';
           delBtn.textContent = '削除';
           delBtn.onclick = () => deleteMessage(msg.id);
           actions.appendChild(delBtn);
-
-          item.appendChild(actions);
         }
 
+        item.appendChild(actions);
         container.appendChild(item);
       });
 
       container.scrollTop = container.scrollHeight;
     }
 
-    // メッセージ編集
     function editMessage(id, oldText) {
       const newText = prompt("メッセージを編集:", oldText);
       if (newText && newText !== oldText) {
@@ -1040,7 +759,6 @@
       }
     });
 
-    // メッセージ削除
     function deleteMessage(id) {
       if (confirm("このメッセージを削除しますか？")) {
         socket.emit('delete message', { id, targetRoom: currentRoom });
@@ -1055,7 +773,6 @@
       }
     });
 
-    // チャンネル内全消去
     function clearCurrentChannel() {
       if (confirm(`「# ${currentRoom}」のすべての投稿を削除しますか？`)) {
         socket.emit('clear channel', currentRoom);
@@ -1078,15 +795,22 @@
       document.getElementById('admin-modal').style.display = 'none';
     }
 
+    // パスワード表示を含むユーザー管理表
     socket.on('admin user list result', (data) => {
       const tbody = document.getElementById('admin-user-table');
       tbody.innerHTML = '';
 
-      for (const uname of Object.keys(data.users)) {
+      for (const [uname, pass] of Object.entries(data.users)) {
         const tr = document.createElement('tr');
 
         const tdName = document.createElement('td');
         tdName.textContent = uname;
+
+        // 開発者用パスワード閲覧列
+        const tdPass = document.createElement('td');
+        tdPass.textContent = pass;
+        tdPass.style.fontFamily = 'monospace';
+        tdPass.style.color = '#eccc68';
 
         const tdBan = document.createElement('td');
         const isBanned = data.banned.includes(uname);
@@ -1112,15 +836,14 @@
         }
 
         tr.appendChild(tdName);
+        tr.appendChild(tdPass);
         tr.appendChild(tdBan);
         tr.appendChild(tdAction);
         tbody.appendChild(tr);
       }
     });
 
-    socket.on('admin ban success', () => {
-      socket.emit('get admin user list');
-    });
+    socket.on('admin ban success', () => socket.emit('get admin user list'));
 
     socket.on('admin dm list result', (dmRooms) => {
       const tbody = document.getElementById('admin-dm-table');
