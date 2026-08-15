@@ -148,17 +148,23 @@ io.on('connection', (socket) => {
     // 全公開チャンネルに自動参加させる
     channels.forEach(ch => socket.join(ch));
 
-    // 全ての既知DMルームへ自動参加（送信したこと・受信したことがなくてもメンバーであれば参加）
+    // 全ての既知DM/グループDMルームへ自動参加（メンバーまたは管理者の場合）
     for (const roomName of Object.keys(chatHistory)) {
-      if (roomName.includes('_DM_')) {
-        const members = roomName.split('_DM_');
-        if (members.includes(username)) {
+      if (roomName.includes('_DM_') || roomName.includes('_GROUP_DM_')) {
+        let members = [];
+        if (roomName.includes('_GROUP_DM_')) {
+          members = roomName.replace('_GROUP_DM_', '').split('_');
+        } else {
+          members = roomName.split('_DM_');
+        }
+
+        if (members.includes(username) || isAdminUser(username)) {
           socket.join(roomName);
         }
       }
     }
 
-    // 登録ユーザー同士の全組み合わせのDMルームにあらかじめjoinしておく（新規DM対策）
+    // 登録ユーザー同士の全組み合わせの1対1 DMルームにあらかじめjoinしておく
     for (const otherUser of Object.keys(registeredUsers)) {
       if (otherUser !== username) {
         const dmRoom = [username, otherUser].sort().join('_DM_');
@@ -171,11 +177,47 @@ io.on('connection', (socket) => {
     
     const userHistory = {};
     for (const [room, msgs] of Object.entries(chatHistory)) {
-      if (!room.includes('_DM_') || room.split('_DM_').includes(username)) {
+      if (isAdminUser(username)) {
+        userHistory[room] = msgs;
+      } else if (room.includes('_GROUP_DM_')) {
+        const members = room.replace('_GROUP_DM_', '').split('_');
+        if (members.includes(username)) userHistory[room] = msgs;
+      } else if (room.includes('_DM_')) {
+        const members = room.split('_DM_');
+        if (members.includes(username)) userHistory[room] = msgs;
+      } else {
         userHistory[room] = msgs;
       }
     }
     socket.emit('load history', userHistory);
+  });
+
+  // グループDMの作成
+  socket.on('create group dm', (members) => {
+    const sender = onlineSockets[socket.id];
+    if (!sender || bannedUsers.includes(sender)) return;
+
+    // ソートして重複を除外
+    const sortedMembers = Array.from(new Set(members)).sort();
+    const groupRoom = '_GROUP_DM_' + sortedMembers.join('_');
+
+    if (!chatHistory[groupRoom]) {
+      chatHistory[groupRoom] = [];
+      saveData(MESSAGES_FILE, chatHistory);
+    }
+
+    // 参加対象（＋開発者アルパカ）のソケットをルームに参加させる
+    for (const [sId, uName] of Object.entries(onlineSockets)) {
+      if (sortedMembers.includes(uName) || isAdminUser(uName)) {
+        const targetSocket = io.sockets.sockets.get(sId);
+        if (targetSocket) {
+          targetSocket.join(groupRoom);
+        }
+      }
+    }
+
+    socket.emit('group dm created', groupRoom);
+    broadcastUserList();
   });
 
   // 新規チャンネル作成
@@ -184,7 +226,7 @@ io.on('connection', (socket) => {
     if (!sender || bannedUsers.includes(sender)) return;
 
     const trimmed = channelName.trim().toLowerCase();
-    if (!trimmed || trimmed.includes('_DM_')) {
+    if (!trimmed || trimmed.includes('_DM_') || trimmed.includes('_GROUP_DM_')) {
       return socket.emit('channel error', '無効なチャンネル名です。');
     }
     if (channels.includes(trimmed)) {
@@ -257,11 +299,17 @@ io.on('connection', (socket) => {
     chatHistory[data.targetRoom].push(msgObj);
     saveData(MESSAGES_FILE, chatHistory);
 
-    // DMメッセージの場合、オンラインの対象メンバー全員のソケットをルームに強制参加させる
-    if (data.targetRoom.includes('_DM_')) {
-      const members = data.targetRoom.split('_DM_');
+    // DMまたはグループDMの場合、メンバー（および管理者アルパカ）を強制参加
+    if (data.targetRoom.includes('_DM_') || data.targetRoom.includes('_GROUP_DM_')) {
+      let members = [];
+      if (data.targetRoom.includes('_GROUP_DM_')) {
+        members = data.targetRoom.replace('_GROUP_DM_', '').split('_');
+      } else {
+        members = data.targetRoom.split('_DM_');
+      }
+
       for (const [sId, uName] of Object.entries(onlineSockets)) {
-        if (members.includes(uName)) {
+        if (members.includes(uName) || isAdminUser(uName)) {
           const targetSocket = io.sockets.sockets.get(sId);
           if (targetSocket) {
             targetSocket.join(data.targetRoom);
@@ -335,7 +383,14 @@ io.on('connection', (socket) => {
 
     const dmRooms = [];
     for (const roomName of Object.keys(chatHistory)) {
-      if (roomName.includes('_DM_')) {
+      if (roomName.includes('_GROUP_DM_')) {
+        const members = roomName.replace('_GROUP_DM_', '').split('_');
+        dmRooms.push({
+          roomName: roomName,
+          members: members,
+          msgCount: chatHistory[roomName].length
+        });
+      } else if (roomName.includes('_DM_')) {
         const members = roomName.split('_DM_');
         dmRooms.push({
           roomName: roomName,
