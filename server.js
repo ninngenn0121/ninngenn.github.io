@@ -10,7 +10,7 @@ app.use(express.static(__dirname));
 
 // データベース代わりのメモリ保持オブジェクト
 const users = {
-  'アルパカ': 'kupaa0121' // 初期管理者アカウント
+  'アルパカ': { password: 'kupaa0121', lastSeen: null } // ★ ここを修正
 };
 let bannedUsers = [];
 let bannedIPs = [];      // IP BAN対象リスト
