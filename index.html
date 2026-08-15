@@ -75,12 +75,13 @@
 
     /* サイドバー */
     #sidebar {
-      width: 260px;
+      width: 280px;
       background-color: #2f3136;
       color: #dcddde;
       display: flex;
       flex-direction: column;
       border-right: 1px solid #202225;
+      overflow-y: auto;
     }
     .sidebar-header {
       padding: 16px;
@@ -90,16 +91,20 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
     .section-title {
       padding: 12px 16px 4px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: bold;
       color: #8e9297;
       text-transform: uppercase;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      margin-top: 8px;
     }
     .add-btn {
       background: none;
@@ -123,6 +128,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      font-size: 13px;
     }
     .item-list li:hover {
       background-color: #393c43;
@@ -131,6 +137,15 @@
     .item-list li.active {
       background-color: #42464d;
       color: #fff;
+    }
+    .user-info-text {
+      display: flex;
+      flex-direction: column;
+    }
+    .offline-time {
+      font-size: 10px;
+      color: #72767d;
+      margin-top: 2px;
     }
     .badge {
       background-color: #f04747;
@@ -144,7 +159,8 @@
       height: 8px;
       border-radius: 50%;
       display: inline-block;
-      margin-right: 6px;
+      margin-right: 8px;
+      flex-shrink: 0;
     }
     .online { background-color: #43b581; }
     .offline { background-color: #747f8d; }
@@ -364,11 +380,17 @@
       </div>
       <ul class="item-list" id="channel-list"></ul>
 
-      <!-- ダイレクトメッセージエリア -->
+      <!-- オンラインユーザー (DM) エリア -->
       <div class="section-title">
-        <span>ダイレクトメッセージ</span>
+        <span>オンライン</span>
       </div>
-      <ul class="item-list" id="dm-user-list"></ul>
+      <ul class="item-list" id="online-dm-list"></ul>
+
+      <!-- オフラインユーザー (DM) エリア -->
+      <div class="section-title">
+        <span>オフライン</span>
+      </div>
+      <ul class="item-list" id="offline-dm-list"></ul>
     </div>
 
     <!-- チャットメインエリア -->
@@ -473,6 +495,9 @@
       }
 
       socket.emit('register user', currentUser);
+      
+      // 1分ごとに表示を更新（オフライン時間のリアルタイム更新用）
+      setInterval(renderUserLists, 60000);
     });
 
     socket.on('auth error', (msg) => {
@@ -531,9 +556,26 @@
       renderUserLists();
     });
 
+    // 経過時間計算フォーマット
+    function formatOfflineTime(lastSeen) {
+      if (!lastSeen) return 'オフライン';
+      const diffMs = Date.now() - new Date(lastSeen).getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+
+      if (diffMins < 1) return 'たった今オフライン';
+      if (diffMins < 60) return `${diffMins}分前からオフライン`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `${diffHours}時間前からオフライン`;
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays}日前からオフライン`;
+    }
+
     function renderUserLists() {
-      const dmListEl = document.getElementById('dm-user-list');
-      dmListEl.innerHTML = '';
+      const onlineListEl = document.getElementById('online-dm-list');
+      const offlineListEl = document.getElementById('offline-dm-list');
+      
+      onlineListEl.innerHTML = '';
+      offlineListEl.innerHTML = '';
 
       for (const [uname, info] of Object.entries(onlineUserList)) {
         if (uname === currentUser) continue; // 自分はリストから外す
@@ -549,19 +591,31 @@
         const dot = document.createElement('span');
         dot.className = `status-dot ${info.isOnline ? 'online' : 'offline'}`;
 
+        const textGroup = document.createElement('div');
+        textGroup.className = 'user-info-text';
+
         const nameSpan = document.createElement('span');
         nameSpan.textContent = uname;
-
-        userContainer.appendChild(dot);
-        userContainer.appendChild(nameSpan);
 
         if (uname === 'アルパカ') {
           const adm = document.createElement('span');
           adm.className = 'admin-badge';
           adm.textContent = '開発者';
-          userContainer.appendChild(adm);
+          nameSpan.appendChild(adm);
         }
 
+        textGroup.appendChild(nameSpan);
+
+        // オフラインの場合、経過時間を表示
+        if (!info.isOnline) {
+          const timeSpan = document.createElement('span');
+          timeSpan.className = 'offline-time';
+          timeSpan.textContent = formatOfflineTime(info.lastSeen);
+          textGroup.appendChild(timeSpan);
+        }
+
+        userContainer.appendChild(dot);
+        userContainer.appendChild(textGroup);
         li.appendChild(userContainer);
 
         // 未読バッジ
@@ -572,8 +626,17 @@
           li.appendChild(badge);
         }
 
-        li.onclick = () => switchRoom(dmRoom);
-        dmListEl.appendChild(li);
+        // クリック時に相手も確実にそのDMルームに参加させる
+        li.onclick = () => {
+          socket.emit('start dm', { targetUser: uname });
+          switchRoom(dmRoom);
+        };
+
+        if (info.isOnline) {
+          onlineListEl.appendChild(li);
+        } else {
+          offlineListEl.appendChild(li);
+        }
       }
     }
 
@@ -607,8 +670,8 @@
       // チャットタイトルの変更
       if (roomName.includes('_DM_')) {
         const members = roomName.split('_DM_');
-        const targetUser = members.find(m => m !== currentUser) || currentUser;
-        document.getElementById('current-room-title').textContent = `@ ${targetUser}`;
+        const targetUser = members.find(m => m !== currentUser) || members[0];
+        document.getElementById('current-room-title').textContent = `@ ${members.join(' ↔ ')}`;
       } else {
         document.getElementById('current-room-title').textContent = `# ${roomName}`;
       }
