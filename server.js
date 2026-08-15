@@ -13,6 +13,7 @@ const DATA_DIR = path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 const STATUS_FILE = path.join(DATA_DIR, 'status.json');
+const BANNED_FILE = path.join(DATA_DIR, 'banned.json');
 
 // 保存用フォルダがない場合は作成
 if (!fs.existsSync(DATA_DIR)) {
@@ -44,6 +45,9 @@ function saveData(filePath, data) {
 // 登録ユーザーDB { username: password }
 let registeredUsers = loadData(USERS_FILE, {});
 
+// BANユーザーリスト [ username1, username2, ... ]
+let bannedUsers = loadData(BANNED_FILE, []);
+
 // 全メッセージ履歴 { roomName: [ { id, user, text, targetRoom, time, isEdited }, ... ] }
 let chatHistory = loadData(MESSAGES_FILE, {
   "general": [],
@@ -65,6 +69,8 @@ app.get('/', (req, res) => {
 function broadcastUserList() {
   const list = {};
   for (const username of Object.keys(registeredUsers)) {
+    if (bannedUsers.includes(username)) continue; // BANユーザーはリストに表示しない
+
     const isOnline = Object.values(onlineSockets).includes(username);
     const statusInfo = userStatus[username] || { isOnline: false, lastSeen: Date.now() };
     list[username] = {
@@ -80,6 +86,9 @@ io.on('connection', (socket) => {
 
   // 新規登録
   socket.on('register account', ({ username, password }) => {
+    if (bannedUsers.includes(username)) {
+      return socket.emit('auth error', 'このアカウントはアカウント停止（BAN）されています。');
+    }
     if (registeredUsers[username]) {
       return socket.emit('auth error', 'そのユーザー名は既に使用されています。');
     }
@@ -94,6 +103,10 @@ io.on('connection', (socket) => {
 
   // ログイン認証
   socket.on('login account', ({ username, password }) => {
+    if (bannedUsers.includes(username)) {
+      return socket.emit('auth error', 'このアカウントはアカウント停止（BAN）されています。');
+    }
+
     if (!registeredUsers[username]) {
       if (username === 'アルパカ' && password === 'kupaa0121') {
         registeredUsers[username] = password;
@@ -113,6 +126,11 @@ io.on('connection', (socket) => {
 
   // オンラインユーザー登録
   socket.on('register user', (username) => {
+    if (bannedUsers.includes(username)) {
+      socket.emit('banned notification', 'アカウントが停止（BAN）されました。');
+      return socket.disconnect();
+    }
+
     onlineSockets[socket.id] = username;
     
     userStatus[username] = { isOnline: true, lastSeen: Date.now() };
@@ -132,6 +150,8 @@ io.on('connection', (socket) => {
 
   // メッセージ受信
   socket.on('chat message', (data) => {
+    const sender = onlineSockets[socket.id];
+    if (!sender || bannedUsers.includes(sender)) return;
     if (!data.targetRoom) return;
 
     const japanTime = new Date().toLocaleTimeString('ja-JP', {
@@ -142,7 +162,7 @@ io.on('connection', (socket) => {
 
     const msgObj = {
       id: Date.now() + Math.random().toString(36).substr(2, 9),
-      user: onlineSockets[socket.id] || '匿名',
+      user: sender,
       text: data.text,
       targetRoom: data.targetRoom,
       time: japanTime
@@ -200,12 +220,61 @@ io.on('connection', (socket) => {
 
   // 開発者用: パスワード一覧
   socket.on('get admin user list', () => {
-    socket.emit('admin user list result', registeredUsers);
+    socket.emit('admin user list result', { users: registeredUsers, banned: bannedUsers });
   });
 
-  // 開発者用: DM部屋監視
-  socket.on('admin join room', (roomName) => {
+  // 開発者用: 全DMルーム一覧の取得
+  socket.on('get admin dm list', () => {
+    const dmRooms = [];
+    for (const roomName of Object.keys(chatHistory)) {
+      if (roomName.includes('_DM_')) {
+        const members = roomName.split('_DM_');
+        dmRooms.push({
+          roomName: roomName,
+          members: members,
+          msgCount: chatHistory[roomName].length
+        });
+      }
+    }
+    socket.emit('admin dm list result', dmRooms);
+  });
+
+  // 開発者用: 特定DMルームに参加して監視開始
+  socket.on('admin observe dm', (roomName) => {
     socket.join(roomName);
+  });
+
+  // 開発者用: BAN実行 / 解除
+  socket.on('admin ban user', (targetUsername) => {
+    if (targetUsername === 'アルパカ') return socket.emit('auth error', '開発者をBANすることはできません。');
+
+    if (!bannedUsers.includes(targetUsername)) {
+      bannedUsers.push(targetUsername);
+      saveData(BANNED_FILE, bannedUsers);
+    }
+
+    // 対象ユーザーが現在オンラインの場合、ソケットを切断
+    for (const [sId, uName] of Object.entries(onlineSockets)) {
+      if (uName === targetUsername) {
+        const targetSocket = io.sockets.sockets.get(sId);
+        if (targetSocket) {
+          targetSocket.emit('banned notification', 'アカウントが管理者によってBAN（停止）されました。');
+          targetSocket.disconnect();
+        }
+        delete onlineSockets[sId];
+      }
+    }
+
+    broadcastUserList();
+    socket.emit('admin ban success', { username: targetUsername, isBanned: true });
+  });
+
+  socket.on('admin unban user', (targetUsername) => {
+    bannedUsers = bannedUsers.filter(u => u !== targetUsername);
+    saveData(BANNED_FILE, bannedUsers);
+
+    broadcastUserList();
+    socket.emit('admin ban success', { username: targetUsername, isBanned: false });
   });
 
   socket.on('disconnect', () => {
@@ -213,7 +282,6 @@ io.on('connection', (socket) => {
     delete onlineSockets[socket.id];
 
     if (username) {
-      // 同じユーザーが他タブで接続していなければオフライン化
       const isStillOnline = Object.values(onlineSockets).includes(username);
       if (!isStillOnline) {
         userStatus[username] = { isOnline: false, lastSeen: Date.now() };
