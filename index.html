@@ -353,18 +353,26 @@
     let chatHistory = {};
     let channelStructure = { categories: [], channels: [], pinned: [], activeDMs: [] };
 
-    // 時刻フォーマット関数（強化版: どのような形式の入力でも hh:mm 形式に安全に変換）
+    // 時刻フォーマット関数（標準時・ミリ秒・文字列入力すべてに対応）
     function formatTime(timeVal) {
       if (!timeVal) {
         const now = new Date();
         return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       }
-      // もし既に "15:04" などの形式であればそのまま返す
+      // もしすでに "15:04" のような hh:mm 文字列単体の場合はそのまま返す
       if (typeof timeVal === 'string' && /^\d{2}:\d{2}$/.test(timeVal)) {
         return timeVal;
       }
-      const d = new Date(timeVal);
-      if (isNaN(d.getTime())) return String(timeVal); // 変換できない文字列の場合はそのまま出力
+      
+      // UTC文字・ISO文字列・数値タイムスタンプからの柔軟なDate変換
+      let d = new Date(timeVal);
+      // "15:04:05" などの時分秒形式文字列に対する処理補正
+      if (isNaN(d.getTime()) && typeof timeVal === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(timeVal)) {
+        return timeVal.substring(0, 5);
+      }
+      if (isNaN(d.getTime())) return String(timeVal); // 変換不可能な場合はそのまま表示
+
+      // クライアントのローカル環境（日本時間）で時・分を取得
       const hours = String(d.getHours()).padStart(2, '0');
       const minutes = String(d.getMinutes()).padStart(2, '0');
       return `${hours}:${minutes}`;
@@ -720,7 +728,8 @@
         text: text,
         fileData: selectedFileData,
         fileType: selectedFileType,
-        replyTo: selectedReplyTo
+        replyTo: selectedReplyTo,
+        time: Date.now() // メッセージ送信時にミリ秒タイムスタンプを常に付与
       });
 
       input.value = '';
@@ -1075,7 +1084,8 @@
 
       socket.emit('chat message', {
         targetRoom: targetRoom,
-        text: text
+        text: text,
+        time: Date.now()
       });
 
       document.getElementById('admin-spy-msg').value = '';
