@@ -40,7 +40,6 @@
       height: 100%; overflow-y: auto;
     }
 
-    /* 全体通知OFF時の消音デザイン */
     #sidebar.global-notify-off .notify-btn { opacity: 0.3 !important; filter: grayscale(100%); }
     #sidebar.global-notify-off .genre-title, #sidebar.global-notify-off .item-list li { opacity: 0.85; }
 
@@ -102,6 +101,8 @@
     }
 
     #messages-container { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    
+    /* メッセージ・ピン留めデザイン */
     .message-item {
       display: flex; flex-direction: column; background: #2f3136;
       padding: 10px 14px; border-radius: 6px; max-width: 85%; position: relative; width: fit-content;
@@ -113,11 +114,18 @@
       border-radius: 3px; font-size: 11px; color: #b9bbbe; margin-bottom: 6px;
     }
 
-    .message-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-    .message-user { font-weight: bold; color: #fff; font-size: 14px; cursor: pointer; }
+    /* アイコン・ユーザー名表示ヘッダー */
+    .message-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .user-avatar {
+      width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
+      background: #5865f2; display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: bold; font-size: 14px; flex-shrink: 0;
+    }
+    .message-user-info { display: flex; flex-direction: column; }
+    .message-user { font-weight: bold; color: #fff; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
     .message-user:hover { text-decoration: underline; }
     .message-time { font-size: 11px; color: #72767d; }
-    .message-text { font-size: 14px; word-break: break-all; color: #dcddde; white-space: pre-wrap; }
+    .message-text { font-size: 14px; word-break: break-all; color: #dcddde; white-space: pre-wrap; margin-top: 2px; }
     .msg-media { max-width: 100%; max-height: 280px; border-radius: 6px; margin-top: 8px; object-fit: contain; }
 
     .msg-actions { display: none; position: absolute; right: 8px; top: 8px; gap: 4px; }
@@ -234,14 +242,22 @@
     </div>
   </div>
 
-  <!-- プロフィールモーダル -->
+  <!-- プロフィールモーダル（アイコン設定追加） -->
   <div id="profile-modal" class="modal">
     <div class="modal-content">
       <h3 id="profile-modal-title">プロフィール</h3>
+      
+      <div style="margin-top:12px; display:flex; flex-direction:column; align-items:center; gap:8px;">
+        <img id="profile-avatar-preview" style="width:64px; height:64px; border-radius:50%; object-fit:cover; background:#5865f2;" src="">
+        <input type="file" id="avatar-file-input" accept="image/*" style="display:none;" onchange="handleAvatarSelect(event)">
+        <button id="profile-avatar-btn" style="background:#747f8d; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:12px;" onclick="document.getElementById('avatar-file-input').click()">アイコン画像を選択</button>
+      </div>
+
       <div style="margin-top:12px;">
         <label style="font-size:12px; color:#b9bbbe;">自己紹介:</label>
         <textarea id="profile-bio-input" style="width:100%; height:80px; background:#36393f; color:#fff; border:1px solid #40444b; border-radius:4px; padding:8px; margin-top:4px;"></textarea>
       </div>
+      
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
         <button id="profile-dm-btn" style="display:none; background:#5865f2; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">💬 このユーザーとDMを開始</button>
         <button id="profile-save-btn" onclick="saveProfile()" style="background:#43b581; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">保存</button>
@@ -262,6 +278,7 @@
           <label><input type="checkbox" id="perm-ban"> 通常BAN</label>
           <label><input type="checkbox" id="perm-ipban"> IP BAN</label>
           <label><input type="checkbox" id="perm-delMsg"> 投稿削除/編集</label>
+          <label><input type="checkbox" id="perm-pinMsg"> ピン留め権限</label>
           <label><input type="checkbox" id="perm-createCh"> チャンネル作成</label>
           <label><input type="checkbox" id="perm-delCh"> チャンネル削除</label>
           <label><input type="checkbox" id="perm-manageCat"> ジャンル編集/削除</label>
@@ -307,6 +324,7 @@
     let selectedFileData = null;
     let selectedFileType = null;
     let selectedReplyTo = null;
+    let currentAvatarData = '';
 
     let activeProfileUser = '';
     let chatHistory = {};
@@ -614,7 +632,7 @@
       }
     });
 
-    // メッセージ送信・返信処理
+    // 返信・ファイル送受信
     function setReplyTarget(msg) {
       selectedReplyTo = msg;
       document.getElementById('reply-preview').style.display = 'flex';
@@ -704,6 +722,16 @@
       }
     });
 
+    socket.on('update pin message', (data) => {
+      const history = chatHistory[data.targetRoom];
+      if (history) {
+        const msg = history.find(m => m.id === data.id);
+        if (msg) msg.isPinned = data.isPinned;
+        if (data.targetRoom === currentRoom) renderMessages();
+      }
+    });
+
+    // メッセージ描画（「アイコン 名前 ↓」形式）
     function renderMessages() {
       const container = document.getElementById('messages-container');
       container.innerHTML = '';
@@ -722,7 +750,36 @@
 
         const header = document.createElement('div');
         header.className = 'message-header';
-        header.innerHTML = `<span class="message-user" onclick="openUserProfile('${msg.user}')">${msg.user}</span><span class="message-time">${msg.time} ${msg.isEdited ? '(編集済み)' : ''}</span>`;
+
+        // アイコン画像
+        if (msg.userAvatar) {
+          const img = document.createElement('img');
+          img.className = 'user-avatar';
+          img.src = msg.userAvatar;
+          header.appendChild(img);
+        } else {
+          const defaultAvatar = document.createElement('div');
+          defaultAvatar.className = 'user-avatar';
+          defaultAvatar.textContent = msg.user.charAt(0).toUpperCase();
+          header.appendChild(defaultAvatar);
+        }
+
+        const userInfo = document.createElement('div');
+        userInfo.className = 'message-user-info';
+
+        const userSpan = document.createElement('span');
+        userSpan.className = 'message-user';
+        userSpan.textContent = `${msg.user} ↓`;
+        userSpan.onclick = () => openUserProfile(msg.user);
+
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'message-time';
+        timeSpan.textContent = `${msg.time} ${msg.isEdited ? '(編集済み)' : ''} ${msg.isPinned ? '📌 ピン留め中' : ''}`;
+
+        userInfo.appendChild(userSpan);
+        userInfo.appendChild(timeSpan);
+        header.appendChild(userInfo);
+
         item.appendChild(header);
 
         if (msg.text) {
@@ -807,11 +864,24 @@
       if (roomName === currentRoom) renderMessages();
     });
 
-    // プロフィール画面
+    // プロフィール画面＆アイコン画像登録
+    function handleAvatarSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        currentAvatarData = event.target.result;
+        document.getElementById('profile-avatar-preview').src = currentAvatarData;
+      };
+      reader.readAsDataURL(file);
+    }
+
     function openMyProfile() {
       activeProfileUser = currentUser;
       document.getElementById('profile-modal-title').textContent = `${currentUser} のプロフィール編集`;
       document.getElementById('profile-save-btn').style.display = 'block';
+      document.getElementById('profile-avatar-btn').style.display = 'inline-block';
       document.getElementById('profile-dm-btn').style.display = 'none';
       document.getElementById('profile-bio-input').readOnly = false;
       socket.emit('get profile', currentUser);
@@ -822,6 +892,7 @@
       activeProfileUser = uname;
       document.getElementById('profile-modal-title').textContent = `${uname} のプロフィール`;
       document.getElementById('profile-save-btn').style.display = 'none';
+      document.getElementById('profile-avatar-btn').style.display = 'none';
 
       const dmBtn = document.getElementById('profile-dm-btn');
       if (uname !== currentUser) {
@@ -838,13 +909,15 @@
 
     socket.on('profile data', (data) => {
       document.getElementById('profile-bio-input').value = data.profile.bio || '';
+      currentAvatarData = data.profile.avatar || '';
+      document.getElementById('profile-avatar-preview').src = currentAvatarData || '';
     });
 
     function saveProfile() {
       const bio = document.getElementById('profile-bio-input').value;
-      socket.emit('update profile', { bio });
+      socket.emit('update profile', { bio, avatar: currentAvatarData });
       closeProfileModal();
-      alert('プロフィールを保存しました！');
+      alert('プロフィール・アイコンを保存しました！');
     }
 
     function closeProfileModal() { document.getElementById('profile-modal').style.display = 'none'; }
@@ -868,6 +941,7 @@
         ipBan: document.getElementById('perm-ipban').checked,
         deleteMessage: document.getElementById('perm-delMsg').checked,
         editMessage: document.getElementById('perm-delMsg').checked,
+        pinMessage: document.getElementById('perm-pinMsg').checked,
         createChannel: document.getElementById('perm-createCh').checked,
         deleteChannel: document.getElementById('perm-delCh').checked,
         manageCategories: document.getElementById('perm-manageCat').checked,
