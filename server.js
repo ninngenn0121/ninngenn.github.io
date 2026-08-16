@@ -312,7 +312,12 @@ io.on('connection', (socket) => {
       fileData: data.fileData || null,
       fileType: data.fileType || null,
       replyTo: data.replyTo || null,
-      time: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
+      time: new Date().toLocaleTimeString('ja-JP', { 
+        timeZone: 'Asia/Tokyo', 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: false 
+      }),
       isEdited: false,
       isPinned: false
     };
