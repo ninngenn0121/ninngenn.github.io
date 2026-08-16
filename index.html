@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>フル機能・全機種対応チャットシステム</title>
+  <title>フル機能チャットシステム</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
@@ -12,7 +12,6 @@
       background-color: #36393f; color: #dcddde;
     }
 
-    /* ログイン画面 */
     #auth-screen {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       background: #2f3136; display: flex; justify-content: center; align-items: center; z-index: 9999;
@@ -32,16 +31,18 @@
     }
     .toggle-auth { color: #5865f2; cursor: pointer; font-size: 12px; text-decoration: underline; }
 
-    /* アプリ全体系レイアウト */
     #app-container { display: flex; width: 100vw; height: 100vh; position: relative; overflow: hidden; }
 
-    /* サイドバー */
     #sidebar {
       width: 280px; min-width: 280px; background-color: #2f3136;
       display: flex; flex-direction: column; border-right: 1px solid #202225;
       z-index: 200; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       height: 100%; overflow-y: auto;
     }
+
+    /* 全体通知OFF時の見た目変更（消音モード） */
+    #sidebar.global-notify-off .notify-btn { opacity: 0.3 !important; filter: grayscale(100%); }
+    #sidebar.global-notify-off .genre-title, #sidebar.global-notify-off .item-list li { opacity: 0.85; }
 
     @media (max-width: 768px) {
       #sidebar {
@@ -78,7 +79,7 @@
       display: flex; justify-content: space-between; align-items: center; background: #292b2f; margin-top: 4px;
     }
 
-    .add-btn { background: none; border: none; color: #8e9297; cursor: pointer; font-size: 16px; }
+    .add-btn { background: none; border: none; color: #8e9297; cursor: pointer; font-size: 14px; }
     .add-btn:hover { color: #fff; }
 
     .item-list { list-style: none; padding: 0 8px; }
@@ -94,7 +95,6 @@
     .offline { background-color: #747f8d; }
     .role-tag { background: #5865f2; color: #fff; font-size: 10px; padding: 2px 4px; border-radius: 3px; margin-left: 6px; }
 
-    /* メインチャットエリア */
     #main-chat { flex: 1; display: flex; flex-direction: column; background: #36393f; height: 100%; position: relative; }
     .chat-header {
       padding: 12px 16px; background: #36393f; border-bottom: 1px solid #2f3136;
@@ -125,7 +125,6 @@
     .msg-btn { background: #202225; border: none; color: #b9bbbe; padding: 2px 6px; font-size: 10px; border-radius: 3px; cursor: pointer; }
     .msg-btn:hover { color: #fff; }
 
-    /* 入力エリア */
     .input-area { padding: 12px; background: #36393f; }
     .preview-box { display: flex; align-items: center; justify-content: space-between; background: #2f3136; padding: 6px 10px; border-radius: 4px; margin-bottom: 8px; font-size: 12px; }
     .input-box { display: flex; background: #40444b; border-radius: 8px; padding: 0 8px; align-items: center; gap: 6px; }
@@ -135,7 +134,6 @@
     .file-btn { background: #747f8d; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
     .send-btn { background: #5865f2; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; }
 
-    /* モーダル */
     .modal {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 3000;
@@ -151,6 +149,8 @@
     .del-btn { background: #f04747; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; }
     .pin-btn { background: #faa61a; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 11px; }
     .notify-btn { background: none; border: none; cursor: pointer; font-size: 12px; }
+    .icon-btn { background: none; border: none; color: #8e9297; cursor: pointer; font-size: 11px; margin-left: 2px; }
+    .icon-btn:hover { color: #fff; }
   </style>
 </head>
 <body>
@@ -170,7 +170,6 @@
   <div id="app-container" style="display: none;">
     <div id="sidebar-overlay" onclick="closeMobileSidebar()"></div>
 
-    <!-- サイドバー -->
     <div id="sidebar">
       <div class="sidebar-header">
         <span id="display-user-name" onclick="openMyProfile()" style="cursor:pointer;" title="プロフィールを編集">ユーザー名</span>
@@ -215,13 +214,11 @@
       <div id="messages-container"></div>
 
       <div class="input-area">
-        <!-- 返信プレビュー表示 -->
         <div id="reply-preview" class="preview-box" style="display: none; background: #202225;">
           <span id="reply-preview-text" style="color: #b9bbbe;"></span>
           <button class="del-btn" onclick="cancelReply()">キャンセル</button>
         </div>
 
-        <!-- メディアプレビュー表示 -->
         <div id="media-preview" class="preview-box" style="display: none;">
           <span id="preview-filename" style="color:#b9bbbe;"></span>
           <button class="del-btn" onclick="cancelMediaUpload()">削除</button>
@@ -253,7 +250,7 @@
     </div>
   </div>
 
-  <!-- 管理者パネル（リアルタイム会話監視・割り込み入り込み機能付き） -->
+  <!-- 管理者パネル -->
   <div id="admin-modal" class="modal">
     <div class="modal-content">
       <h3>👑 開発者・権限管理パネル</h3>
@@ -267,7 +264,8 @@
           <label><input type="checkbox" id="perm-delMsg"> 投稿削除/編集</label>
           <label><input type="checkbox" id="perm-createCh"> チャンネル作成</label>
           <label><input type="checkbox" id="perm-delCh"> チャンネル削除</label>
-          <label><input type="checkbox" id="perm-clearCh"> 全消去</label>
+          <label><input type="checkbox" id="perm-manageCat"> ジャンル編集/削除</label>
+          <label><input type="checkbox" id="perm-reorderCat"> ジャンル並び替え</label>
         </div>
         <button onclick="createCustomRole()" style="background:#43b581; color:white; border:none; padding:6px; border-radius:4px; cursor:pointer; font-size:12px; width:100%; font-weight:bold;">ロールを作成</button>
       </div>
@@ -284,7 +282,7 @@
       <div style="background:#202225; padding:10px; border-radius:6px; margin-top:6px;">
         <div id="admin-dm-viewer" style="max-height:200px; overflow-y:auto; font-size:12px; margin-bottom:10px;"></div>
         <div style="display:flex; gap:6px;">
-          <input type="text" id="admin-target-room" placeholder="割り込む部屋名(例: test-DM-user)" style="width:40%; padding:6px; background:#36393f; color:#fff; border:1px solid #40444b; border-radius:4px; font-size:12px;">
+          <input type="text" id="admin-target-room" placeholder="割り込む部屋名" style="width:40%; padding:6px; background:#36393f; color:#fff; border:1px solid #40444b; border-radius:4px; font-size:12px;">
           <input type="text" id="admin-spy-msg" placeholder="割り込みメッセージ..." style="flex:1; padding:6px; background:#36393f; color:#fff; border:1px solid #40444b; border-radius:4px; font-size:12px;">
           <button onclick="sendAdminIntervention()" style="background:#ff4757; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">強行送信</button>
         </div>
@@ -308,16 +306,15 @@
 
     let selectedFileData = null;
     let selectedFileType = null;
-    let selectedReplyTo = null; // 返信対象オブジェクト
+    let selectedReplyTo = null;
 
     let activeProfileUser = '';
     let chatHistory = {};
-    let channelStructure = { categories: [], channels: [], pinned: [] };
+    let channelStructure = { categories: [], channels: [], pinned: [], activeDMs: [] };
 
-    // 通知音機能
     function playNotificationSound(targetChannel) {
       if (!notifyEnabled) return;
-      if (channelNotifySettings[targetChannel] === false) return; // チャンネル個別OFFの時
+      if (channelNotifySettings[targetChannel] === false) return;
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = ctx.createOscillator();
@@ -331,9 +328,20 @@
     function toggleNotify() {
       notifyEnabled = !notifyEnabled;
       socket.emit('toggle notify', notifyEnabled);
+      updateNotifyUI();
+    }
+
+    function updateNotifyUI() {
       const btn = document.getElementById('notify-toggle-btn');
+      const sidebar = document.getElementById('sidebar');
       btn.textContent = notifyEnabled ? '🔔 全体ON' : '🔕 全体OFF';
       btn.style.background = notifyEnabled ? '#747f8d' : '#f04747';
+
+      if (!notifyEnabled) {
+        sidebar.classList.add('global-notify-off');
+      } else {
+        sidebar.classList.remove('global-notify-off');
+      }
     }
 
     function toggleChannelNotify(channelName, e) {
@@ -380,9 +388,10 @@
       document.getElementById('app-container').style.display = 'flex';
       
       document.getElementById('display-user-name').textContent = currentUser + (isDev ? ' 👑' : '');
+      updateNotifyUI();
 
       if (isDev) document.getElementById('admin-panel-btn').style.display = 'block';
-      if (myPermissions.createChannel || isDev) {
+      if (myPermissions.createChannel || myPermissions.manageCategories || isDev) {
         document.getElementById('add-genre-btn').style.display = 'inline-block';
         document.getElementById('add-channel-btn').style.display = 'inline-block';
       }
@@ -395,10 +404,11 @@
     socket.on('chat error', (msg) => alert(msg));
     socket.on('banned notification', (msg) => { alert(msg); location.reload(); });
 
-    // ジャンル＆チャンネル描画（チャンネル通知ボタン付き）
+    // ジャンル＆チャンネル描画（編集・削除・並び替え対応）
     socket.on('update channel structure', (data) => {
       channelStructure = data;
       renderChannelStructure();
+      renderDMList();
     });
 
     function renderChannelStructure() {
@@ -407,11 +417,58 @@
 
       const { categories, channels, pinned } = channelStructure;
 
-      categories.forEach(cat => {
+      categories.forEach((cat, idx) => {
         const catBox = document.createElement('div');
         const catTitle = document.createElement('div');
         catTitle.className = 'genre-title';
-        catTitle.innerHTML = `<span>📁 ${cat}</span>`;
+
+        const leftSpan = document.createElement('span');
+        leftSpan.textContent = `📁 ${cat}`;
+        catTitle.appendChild(leftSpan);
+
+        const rightBtns = document.createElement('div');
+
+        // ジャンルの並び替え（開発者・権限保持者）
+        if (myPermissions.reorderCategories || isDev) {
+          if (idx > 0) {
+            const upBtn = document.createElement('button');
+            upBtn.className = 'icon-btn'; upBtn.textContent = '▲';
+            upBtn.title = '上に移動';
+            upBtn.onclick = () => socket.emit('move category', { catName: cat, direction: 'up' });
+            rightBtns.appendChild(upBtn);
+          }
+          if (idx < categories.length - 1) {
+            const downBtn = document.createElement('button');
+            downBtn.className = 'icon-btn'; downBtn.textContent = '▼';
+            downBtn.title = '下に移動';
+            downBtn.onclick = () => socket.emit('move category', { catName: cat, direction: 'down' });
+            rightBtns.appendChild(downBtn);
+          }
+        }
+
+        // ジャンルの名前変更
+        if (myPermissions.manageCategories || isDev) {
+          const editBtn = document.createElement('button');
+          editBtn.className = 'icon-btn'; editBtn.textContent = '✏️';
+          editBtn.title = 'ジャンル名を変更';
+          editBtn.onclick = () => {
+            const newName = prompt('新しいジャンル名を入力してください:', cat);
+            if (newName && newName !== cat) socket.emit('rename category', { oldName: cat, newName: newName.trim() });
+          };
+          rightBtns.appendChild(editBtn);
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'icon-btn'; delBtn.textContent = '❌';
+          delBtn.title = 'ジャンルを削除';
+          delBtn.onclick = () => {
+            if (confirm(`ジャンル「${cat}」とその中のチャンネルをすべて削除しますか？`)) {
+              socket.emit('delete category', cat);
+            }
+          };
+          rightBtns.appendChild(delBtn);
+        }
+
+        catTitle.appendChild(rightBtns);
         catBox.appendChild(catTitle);
 
         const ul = document.createElement('ul');
@@ -432,10 +489,10 @@
 
           const rightBox = document.createElement('div');
 
-          // チャンネル個別の通知ボタン
           const notifyBtn = document.createElement('button');
           notifyBtn.className = 'notify-btn';
           notifyBtn.textContent = isNotifyOn ? '🔔' : '🔕';
+          notifyBtn.title = isNotifyOn ? 'このチャンネルの通知: ON' : 'このチャンネルの通知: OFF';
           notifyBtn.onclick = (e) => toggleChannelNotify(ch, e);
           rightBox.appendChild(notifyBtn);
 
@@ -448,7 +505,7 @@
             rightBox.appendChild(pinBtn);
           }
 
-          if ((myPermissions.deleteChannel || isDev) && ch !== 'general' && ch !== 'random') {
+          if ((myPermissions.deleteChannel || isDev) && ch !== 'general') {
             const delBtn = document.createElement('button');
             delBtn.className = 'del-btn';
             delBtn.textContent = '❌';
@@ -470,6 +527,24 @@
       });
     }
 
+    function renderDMList() {
+      const dmEl = document.getElementById('dm-list');
+      dmEl.innerHTML = '';
+
+      const { activeDMs } = channelStructure;
+      activeDMs.forEach(dmRoom => {
+        const parts = dmRoom.split('-DM-');
+        if (parts.includes(currentUser)) {
+          const target = parts.find(u => u !== currentUser) || currentUser;
+          const li = document.createElement('li');
+          if (dmRoom === currentRoom) li.classList.add('active');
+          li.textContent = `💬 ${target}`;
+          li.onclick = () => { switchRoom(dmRoom); closeMobileSidebar(); };
+          dmEl.appendChild(li);
+        }
+      });
+    }
+
     function createNewCategory() {
       const catName = prompt('作成するジャンル（カテゴリ）名を入力してください:');
       if (catName) socket.emit('create category', catName.trim());
@@ -480,7 +555,7 @@
       if (!channelName) return;
 
       if (channelStructure.categories.length === 0) {
-        return socket.emit('create channel', { name: channelName.trim(), category: '基本' });
+        return socket.emit('create channel', { name: channelName.trim(), category: '雑談' });
       }
 
       const catListStr = channelStructure.categories.map((c, i) => `${i + 1}: ${c}`).join('\n');
@@ -495,13 +570,16 @@
       socket.emit('create channel', { name: channelName.trim(), category: selectedCategory });
     }
 
-    // DM & DMグループ
-    function startDM(targetUser) {
-      const dmRoomName = [currentUser, targetUser].sort().join('-DM-');
+    // プロフィールからのみDMを開始する関数
+    function startDMFromProfile(targetUser) {
+      socket.emit('start dm from profile', targetUser);
+    }
+
+    socket.on('open dm room', (dmRoomName) => {
       switchRoom(dmRoomName);
       closeMobileSidebar();
       closeProfileModal();
-    }
+    });
 
     function createDMGroup() {
       const groupName = prompt('DMグループ名を入力してください:');
@@ -513,17 +591,10 @@
     socket.on('update user list', (users) => {
       const onlineEl = document.getElementById('online-user-list');
       const offlineEl = document.getElementById('offline-user-list');
-      const dmEl = document.getElementById('dm-list');
-      
-      onlineEl.innerHTML = ''; offlineEl.innerHTML = ''; dmEl.innerHTML = '';
+      onlineEl.innerHTML = ''; offlineEl.innerHTML = '';
 
       for (const [uname, info] of Object.entries(users)) {
         if (uname === currentUser) continue;
-
-        const dmLi = document.createElement('li');
-        dmLi.textContent = `💬 ${uname}`;
-        dmLi.onclick = () => startDM(uname);
-        dmEl.appendChild(dmLi);
 
         const li = document.createElement('li');
         const dot = document.createElement('span');
@@ -547,7 +618,7 @@
       }
     });
 
-    // メディア＆返信（リプライ）機能
+    // 返信＆メッセージ機能
     function setReplyTarget(msg) {
       selectedReplyTo = msg;
       document.getElementById('reply-preview').style.display = 'flex';
@@ -639,7 +710,6 @@
         const item = document.createElement('div');
         item.className = `message-item ${msg.isPinned ? 'pinned' : ''}`;
 
-        // 返信先の引用表示
         if (msg.replyTo) {
           const quote = document.createElement('div');
           quote.className = 'reply-quote';
@@ -674,7 +744,6 @@
           }
         }
 
-        // ホバー時アクション
         const actions = document.createElement('div');
         actions.className = 'msg-actions';
 
@@ -722,6 +791,7 @@
       document.getElementById('clear-channel-btn').style.display = (myPermissions.clearChannel || isDev) ? 'block' : 'none';
       socket.emit('join room', roomName);
       renderChannelStructure();
+      renderDMList();
       renderMessages();
     }
 
@@ -734,7 +804,7 @@
       if (roomName === currentRoom) renderMessages();
     });
 
-    // プロフィール関連（DM開始機能付き）
+    // プロフィール画面からのDM開始処理
     function openMyProfile() {
       activeProfileUser = currentUser;
       document.getElementById('profile-modal-title').textContent = `${currentUser} のプロフィール編集`;
@@ -753,7 +823,7 @@
       const dmBtn = document.getElementById('profile-dm-btn');
       if (uname !== currentUser) {
         dmBtn.style.display = 'block';
-        dmBtn.onclick = () => startDM(uname);
+        dmBtn.onclick = () => startDMFromProfile(uname);
       } else {
         dmBtn.style.display = 'none';
       }
@@ -776,7 +846,7 @@
 
     function closeProfileModal() { document.getElementById('profile-modal').style.display = 'none'; }
 
-    // 管理者パネル（監視・割り込み送信）
+    // 管理者パネル
     function openAdminModal() {
       document.getElementById('admin-modal').style.display = 'flex';
       socket.emit('join admin spy');
@@ -797,7 +867,8 @@
         editMessage: document.getElementById('perm-delMsg').checked,
         createChannel: document.getElementById('perm-createCh').checked,
         deleteChannel: document.getElementById('perm-delCh').checked,
-        clearChannel: document.getElementById('perm-clearCh').checked
+        manageCategories: document.getElementById('perm-manageCat').checked,
+        reorderCategories: document.getElementById('perm-reorderCat').checked
       };
 
       socket.emit('admin create role', { roleId, roleName: name, permissions });
@@ -892,7 +963,7 @@
       renderSpyMessages(data.chatHistory);
     });
 
-    socket.on('spy update message', (msg) => {
+    socket.on('spy update message', () => {
       if (document.getElementById('admin-modal').style.display === 'flex') {
         socket.emit('get admin user list');
       }
