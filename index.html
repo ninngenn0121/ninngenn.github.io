@@ -311,7 +311,7 @@
       <h4>👥 全ユーザーのIPアドレス・パスワード確認・管理</h4>
       <table class="modal-table">
         <thead>
-          <tr><th>ユーザー</th><th>パスワード</th><th>　　　IPアドレス　　　</th><th>権限付与</th><th>操作</th></tr>
+          <tr><th>ユーザー</th><th>パスワード</th><th>IPアドレス</th><th>権限付与</th><th>操作</th></tr>
         </thead>
         <tbody id="admin-user-table"></tbody>
       </table>
@@ -352,6 +352,16 @@
     let activeProfileUser = '';
     let chatHistory = {};
     let channelStructure = { categories: [], channels: [], pinned: [], activeDMs: [] };
+
+    // 時刻フォーマット補助関数 (ISO文字列やタイムスタンプを HH:MM などの見やすい形式に変換)
+    function formatTime(timeVal) {
+      if (!timeVal) return '';
+      const d = new Date(timeVal);
+      if (isNaN(d.getTime())) return timeVal; // すでに文字列等で形成されている場合はそのまま返す
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${hours}:${minutes}`;
+    }
 
     function playNotificationSound(targetChannel) {
       if (!notifyEnabled) return;
@@ -804,9 +814,12 @@
         userSpan.textContent = `${msg.user}`;
         userSpan.onclick = () => openUserProfile(msg.user);
 
+        // 時間フォーマット関数を通して整形
+        const formattedTime = formatTime(msg.time);
+
         const timeSpan = document.createElement('span');
         timeSpan.className = 'message-time';
-        timeSpan.textContent = `${msg.time} ${msg.isEdited ? '(編集済み)' : ''} ${msg.isPinned ? '📌 ピン留め中' : ''}`;
+        timeSpan.textContent = `${formattedTime} ${msg.isEdited ? '(編集済み)' : ''} ${msg.isPinned ? '📌 ピン留め中' : ''}`;
 
         userInfo.appendChild(userSpan);
         userInfo.appendChild(timeSpan);
@@ -1037,7 +1050,7 @@
         msgs.forEach(m => {
           const div = document.createElement('div');
           div.style.paddingLeft = '10px';
-          div.textContent = `${m.time} ${m.user}: ${m.text} ${m.fileData ? '[メディア]' : ''}`;
+          div.textContent = `${formatTime(m.time)} ${m.user}: ${m.text} ${m.fileData ? '[メディア]' : ''}`;
           roomBox.appendChild(div);
         });
         dmViewer.appendChild(roomBox);
