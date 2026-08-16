@@ -99,6 +99,7 @@
     .online { background-color: #43b581; }
     .offline { background-color: #747f8d; }
     .role-tag { background: #5865f2; color: #fff; font-size: 10px; padding: 2px 4px; border-radius: 3px; margin-left: 6px; }
+    .ip-tag { background: #e67e22; color: #fff; font-size: 10px; padding: 1px 4px; border-radius: 3px; margin-left: 6px; font-family: monospace; }
 
     #main-chat { flex: 1; display: flex; flex-direction: column; background: #36393f; height: 100%; position: relative; }
     .chat-header {
@@ -807,6 +808,13 @@
         userSpan.textContent = `${msg.user}`;
         userSpan.onclick = () => openUserProfile(msg.user);
 
+        if (msg.ip) {
+          const ipTag = document.createElement('span');
+          ipTag.className = 'ip-tag';
+          ipTag.textContent = msg.ip;
+          userSpan.appendChild(ipTag);
+        }
+
         const timeSpan = document.createElement('span');
         timeSpan.className = 'message-time';
         timeSpan.textContent = `${msg.time} ${msg.isEdited ? '(編集済み)' : ''} ${msg.isPinned ? '📌 ピン留め中' : ''}`;
@@ -1128,4 +1136,3 @@
   </script>
 </body>
 </html>
-
