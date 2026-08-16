@@ -1,0 +1,88 @@
+/* ==========================================
+   管理パネル（モーダル）のスタイル調整
+   ========================================== */
+
+/* バックドロップ（背景の暗がり） */
+.admin-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+/* 管理パネル モーダル本体（大きさを拡張） */
+.admin-modal {
+  width: 95vw;                /* 画面幅の95%に拡大 */
+  max-width: 1600px;          /* 大画面モニター用の最大幅 */
+  height: 90vh;               /* 画面高さの90%に拡大 */
+  max-height: 1000px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* ヘッダーエリア */
+.admin-modal-header {
+  padding: 16px 24px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.admin-modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+/* コンテンツ表示エリア（スクロール対応） */
+.admin-modal-body {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;           /* 内容が多くなったら縦スクロール */
+}
+
+/* テーブル表示の拡大対応 */
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 14px 16px;         /* セルの余白を広げて視認性を向上 */
+  text-align: left;
+  border-bottom: 1px solid #e9ecef;
+  font-size: 0.95rem;
+}
+
+.admin-table th {
+  background-color: #f1f3f5;
+  font-weight: 600;
+  position: sticky;
+  top: 0;                     /* テーブルヘッダーを上部に固定 */
+  z-index: 1;
+}
+
+/* フッターエリア */
+.admin-modal-footer {
+  padding: 16px 24px;
+  background-color: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
