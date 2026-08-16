@@ -69,6 +69,7 @@ const messageSchema = new mongoose.Schema({
   targetRoom: { type: String, required: true },
   user: { type: String, required: true },
   userAvatar: { type: String, default: '' },
+  ip: { type: String, default: '' },
   text: { type: String, default: '' },
   fileData: { type: String, default: null },
   fileType: { type: String, default: null },
@@ -123,6 +124,20 @@ async function getUserPermissions(username) {
 
   const role = await Role.findOne({ roleId: user.roleId });
   return role ? role.permissions : {};
+}
+
+// ユーザー（特に開発者か否か）に応じたメッセージデータのフィルタリング
+async function formatMessagesForUser(messages, targetUsername) {
+  const user = await User.findOne({ username: targetUsername });
+  const isDev = user ? user.isDev : false;
+
+  return messages.map(m => {
+    const doc = m.toObject ? m.toObject() : { ...m };
+    if (!isDev) {
+      delete doc.ip;
+    }
+    return doc;
+  });
 }
 
 // チャンネル構造データの生成・送信
@@ -275,7 +290,8 @@ io.on('connection', (socket) => {
     // デフォルトルーム「general」参加
     socket.join('general');
     const msgs = await Message.find({ targetRoom: 'general' }).sort({ createdAt: 1 });
-    socket.emit('load room history', { room: 'general', messages: msgs });
+    const formattedMsgs = await formatMessagesForUser(msgs, username);
+    socket.emit('load room history', { room: 'general', messages: formattedMsgs });
   });
 
   // --- ルーム切り替え・履歴読み込み ---
@@ -299,7 +315,8 @@ io.on('connection', (socket) => {
     socket.join(roomName);
 
     const msgs = await Message.find({ targetRoom: roomName }).sort({ createdAt: 1 });
-    socket.emit('load room history', { room: roomName, messages: msgs });
+    const formattedMsgs = await formatMessagesForUser(msgs, username);
+    socket.emit('load room history', { room: roomName, messages: formattedMsgs });
   });
 
   // --- メッセージ送信 ---
@@ -312,6 +329,7 @@ io.on('connection', (socket) => {
       targetRoom: data.targetRoom,
       user: senderName,
       userAvatar: sender ? sender.avatar : '',
+      ip: clientIp,
       text: data.text || '',
       fileData: data.fileData || null,
       fileType: data.fileType || null,
@@ -321,8 +339,15 @@ io.on('connection', (socket) => {
       isPinned: false
     };
 
-    await Message.create(msgObj);
-    io.to(data.targetRoom).emit('chat message', msgObj);
+    const savedMsg = await Message.create(msgObj);
+
+    // ルーム内のクライアントに対して、開発者かどうかでIP表示を分岐して送信
+    const roomSockets = await io.in(data.targetRoom).fetchSockets();
+    for (const targetSock of roomSockets) {
+      const targetUsername = onlineUsers[targetSock.id];
+      const [formatted] = await formatMessagesForUser([savedMsg], targetUsername);
+      targetSock.emit('chat message', formatted);
+    }
 
     // 管理者モニタリング中クライアントへのリアルタイム通知
     io.emit('spy update message');
