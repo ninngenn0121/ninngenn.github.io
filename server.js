@@ -39,7 +39,7 @@ let roles = {
 let bannedUsers = [];
 let bannedIPs = [];
 let userIPs = {};
-let profiles = {};
+let profiles = {}; // { username: { bio: '', avatar: '' } }
 
 // アクティブなDMリスト
 let activeDMs = []; // ['user1-DM-user2', ...]
@@ -77,7 +77,8 @@ function getUserList() {
       roleName: roles[udata.role] ? roles[udata.role].name : '一般ユーザー',
       lastSeen: udata.lastSeen || null,
       notify: udata.notify !== false,
-      channelNotify: udata.channelNotify || {}
+      channelNotify: udata.channelNotify || {},
+      avatar: profiles[uname] ? profiles[uname].avatar : ''
     };
   }
 
@@ -188,7 +189,6 @@ io.on('connection', (socket) => {
       chatHistory[dmRoomName] = [];
     }
 
-    // 両者の接続ソケットをDMルームに参加させる
     for (const [id, s] of io.sockets.sockets) {
       if (s.username === socket.username || s.username === targetUser) {
         s.join(dmRoomName);
@@ -199,11 +199,15 @@ io.on('connection', (socket) => {
     socket.emit('open dm room', dmRoomName);
   });
 
-  // プロフィール
+  // プロフィール（アイコン画像更新）
   socket.on('update profile', (profileData) => {
     if (!socket.username) return;
-    profiles[socket.username] = { bio: profileData.bio || '', avatar: profileData.avatar || '' };
+    profiles[socket.username] = {
+      bio: profileData.bio || '',
+      avatar: profileData.avatar || ''
+    };
     io.emit('profile updated', { username: socket.username, profile: profiles[socket.username] });
+    io.emit('update user list', getUserList());
   });
 
   socket.on('get profile', (targetUser) => {
@@ -213,7 +217,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ルーム移動（DM対応を強化）
+  // ルーム移動
   socket.on('join room', (roomName) => {
     socket.rooms.forEach(r => { if (r !== socket.id) socket.leave(r); });
     socket.join(roomName);
@@ -221,18 +225,20 @@ io.on('connection', (socket) => {
     if (!chatHistory[roomName]) {
       chatHistory[roomName] = [];
     }
-    // ルームの最新履歴を送る
     socket.emit('load room history', { room: roomName, messages: chatHistory[roomName] });
   });
 
-  // チャットメッセージ送信（DMルーム対応）
+  // チャットメッセージ送信（アイコン情報付与）
   socket.on('chat message', (data) => {
     const { targetRoom, text, fileData, fileType, replyTo } = data;
     if (!chatHistory[targetRoom]) chatHistory[targetRoom] = [];
 
+    const userProfile = profiles[socket.username] || {};
+
     const newMsg = {
       id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
       user: socket.username || '匿名',
+      userAvatar: userProfile.avatar || '',
       text: text || '',
       fileData: fileData || null,
       fileType: fileType || null,
@@ -245,7 +251,6 @@ io.on('connection', (socket) => {
 
     chatHistory[targetRoom].push(newMsg);
 
-    // 該当ルーム内のユーザーおよび管理者監視ルームに送信
     io.to(targetRoom).emit('chat message', newMsg);
     io.to('admin_spy_room').emit('spy update message', newMsg);
   });
@@ -280,9 +285,12 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ピン留め機能
   socket.on('toggle pin message', (data) => {
-    if (!hasPermission(socket.username, 'pinMessage')) return;
     const { id, targetRoom } = data;
+    if (!hasPermission(socket.username, 'pinMessage')) {
+      return socket.emit('chat error', 'ピン留め権限がありません。');
+    }
     const history = chatHistory[targetRoom];
     if (history) {
       const msg = history.find(m => m.id === id);
@@ -300,7 +308,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ジャンル（カテゴリ）操作
+  // ジャンル操作
   socket.on('create category', (catName) => {
     if (!hasPermission(socket.username, 'manageCategories') && !hasPermission(socket.username, 'createChannel')) {
       return socket.emit('channel error', 'ジャンル作成権限がありません。');
