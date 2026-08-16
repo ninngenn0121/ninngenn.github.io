@@ -353,11 +353,18 @@
     let chatHistory = {};
     let channelStructure = { categories: [], channels: [], pinned: [], activeDMs: [] };
 
-    // 時刻フォーマット補助関数 (ISO文字列やタイムスタンプを HH:MM などの見やすい形式に変換)
+    // 時刻フォーマット関数（強化版: どのような形式の入力でも hh:mm 形式に安全に変換）
     function formatTime(timeVal) {
-      if (!timeVal) return '';
+      if (!timeVal) {
+        const now = new Date();
+        return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      }
+      // もし既に "15:04" などの形式であればそのまま返す
+      if (typeof timeVal === 'string' && /^\d{2}:\d{2}$/.test(timeVal)) {
+        return timeVal;
+      }
       const d = new Date(timeVal);
-      if (isNaN(d.getTime())) return timeVal; // すでに文字列等で形成されている場合はそのまま返す
+      if (isNaN(d.getTime())) return String(timeVal); // 変換できない文字列の場合はそのまま出力
       const hours = String(d.getHours()).padStart(2, '0');
       const minutes = String(d.getMinutes()).padStart(2, '0');
       return `${hours}:${minutes}`;
@@ -802,7 +809,7 @@
         } else {
           const defaultAvatar = document.createElement('div');
           defaultAvatar.className = 'user-avatar';
-          defaultAvatar.textContent = msg.user.charAt(0).toUpperCase();
+          defaultAvatar.textContent = msg.user ? msg.user.charAt(0).toUpperCase() : '?';
           header.appendChild(defaultAvatar);
         }
 
@@ -814,7 +821,7 @@
         userSpan.textContent = `${msg.user}`;
         userSpan.onclick = () => openUserProfile(msg.user);
 
-        // 時間フォーマット関数を通して整形
+        // 時間フォーマット関数を通じて常に安全に描画
         const formattedTime = formatTime(msg.time);
 
         const timeSpan = document.createElement('span');
