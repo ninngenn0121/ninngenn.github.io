@@ -40,7 +40,7 @@
       height: 100%; overflow-y: auto;
     }
 
-    /* 全体通知OFF時の見た目変更（消音モード） */
+    /* 全体通知OFF時の消音デザイン */
     #sidebar.global-notify-off .notify-btn { opacity: 0.3 !important; filter: grayscale(100%); }
     #sidebar.global-notify-off .genre-title, #sidebar.global-notify-off .item-list li { opacity: 0.85; }
 
@@ -107,7 +107,7 @@
       padding: 10px 14px; border-radius: 6px; max-width: 85%; position: relative; width: fit-content;
     }
     .message-item.pinned { border: 2px solid #faa61a; background: #3c3f45; }
-    
+
     .reply-quote {
       background: #202225; padding: 4px 8px; border-left: 3px solid #5865f2;
       border-radius: 3px; font-size: 11px; color: #b9bbbe; margin-bottom: 6px;
@@ -166,7 +166,7 @@
     </div>
   </div>
 
-  <!-- アプリ本体 -->
+  <!-- メイン画面 -->
   <div id="app-container" style="display: none;">
     <div id="sidebar-overlay" onclick="closeMobileSidebar()"></div>
 
@@ -386,7 +386,7 @@
 
       document.getElementById('auth-screen').style.display = 'none';
       document.getElementById('app-container').style.display = 'flex';
-      
+
       document.getElementById('display-user-name').textContent = currentUser + (isDev ? ' 👑' : '');
       updateNotifyUI();
 
@@ -404,7 +404,6 @@
     socket.on('chat error', (msg) => alert(msg));
     socket.on('banned notification', (msg) => { alert(msg); location.reload(); });
 
-    // ジャンル＆チャンネル描画（編集・削除・並び替え対応）
     socket.on('update channel structure', (data) => {
       channelStructure = data;
       renderChannelStructure();
@@ -428,7 +427,6 @@
 
         const rightBtns = document.createElement('div');
 
-        // ジャンルの並び替え（開発者・権限保持者）
         if (myPermissions.reorderCategories || isDev) {
           if (idx > 0) {
             const upBtn = document.createElement('button');
@@ -446,7 +444,6 @@
           }
         }
 
-        // ジャンルの名前変更
         if (myPermissions.manageCategories || isDev) {
           const editBtn = document.createElement('button');
           editBtn.className = 'icon-btn'; editBtn.textContent = '✏️';
@@ -500,7 +497,7 @@
             const pinBtn = document.createElement('button');
             pinBtn.className = 'pin-btn';
             pinBtn.style.marginLeft = '4px';
-            pinBtn.textContent = isPinned ? '解除' : '固定';
+            pinBtn.textContent = isPinned ? '固定' : '解除';
             pinBtn.onclick = (e) => { e.stopPropagation(); socket.emit('toggle pin channel', ch); };
             rightBox.appendChild(pinBtn);
           }
@@ -570,7 +567,6 @@
       socket.emit('create channel', { name: channelName.trim(), category: selectedCategory });
     }
 
-    // プロフィールからのみDMを開始する関数
     function startDMFromProfile(targetUser) {
       socket.emit('start dm from profile', targetUser);
     }
@@ -599,7 +595,7 @@
         const li = document.createElement('li');
         const dot = document.createElement('span');
         dot.className = `status-dot ${info.isOnline ? 'online' : 'offline'}`;
-        
+
         const nameSpan = document.createElement('span');
         nameSpan.textContent = uname;
         if (info.roleName && info.roleName !== '一般ユーザー') {
@@ -618,7 +614,7 @@
       }
     });
 
-    // 返信＆メッセージ機能
+    // メッセージ送信・返信処理
     function setReplyTarget(msg) {
       selectedReplyTo = msg;
       document.getElementById('reply-preview').style.display = 'flex';
@@ -674,6 +670,13 @@
     socket.on('load history', (history) => {
       chatHistory = history;
       renderMessages();
+    });
+
+    socket.on('load room history', (data) => {
+      chatHistory[data.room] = data.messages;
+      if (data.room === currentRoom) {
+        renderMessages();
+      }
     });
 
     socket.on('chat message', (msgObj) => {
@@ -804,7 +807,7 @@
       if (roomName === currentRoom) renderMessages();
     });
 
-    // プロフィール画面からのDM開始処理
+    // プロフィール画面
     function openMyProfile() {
       activeProfileUser = currentUser;
       document.getElementById('profile-modal-title').textContent = `${currentUser} のプロフィール編集`;
