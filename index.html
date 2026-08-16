@@ -99,7 +99,6 @@
     .online { background-color: #43b581; }
     .offline { background-color: #747f8d; }
     .role-tag { background: #5865f2; color: #fff; font-size: 10px; padding: 2px 4px; border-radius: 3px; margin-left: 6px; }
-    .ip-tag { background: #e67e22; color: #fff; font-size: 10px; padding: 1px 4px; border-radius: 3px; margin-left: 6px; font-family: monospace; }
 
     #main-chat { flex: 1; display: flex; flex-direction: column; background: #36393f; height: 100%; position: relative; }
     .chat-header {
@@ -309,10 +308,10 @@
         <button onclick="createCustomRole()" style="background:#43b581; color:white; border:none; padding:6px; border-radius:4px; cursor:pointer; font-size:12px; width:100%; font-weight:bold;">ロールを作成</button>
       </div>
 
-      <h4>👥 ユーザー管理（パスワード確認 / BAN / IP BAN / 権限付与）</h4>
+      <h4>👥 全ユーザーのIPアドレス・パスワード確認・管理</h4>
       <table class="modal-table">
         <thead>
-          <tr><th>ユーザー</th><th>パスワード</th><th>IP</th><th>権限付与</th><th>操作</th></tr>
+          <tr><th>ユーザー</th><th>パスワード</th><th>IPアドレス</th><th>権限付与</th><th>操作</th></tr>
         </thead>
         <tbody id="admin-user-table"></tbody>
       </table>
@@ -343,7 +342,7 @@
     let notifyEnabled = true;
     let channelNotifySettings = {};
 
-    let unreadDMCounts = {}; // { roomName: count }
+    let unreadDMCounts = {};
 
     let selectedFileData = null;
     let selectedFileType = null;
@@ -556,7 +555,6 @@
       });
     }
 
-    // DMリスト描画（未読件数バッジ付き）
     function renderDMList() {
       const dmEl = document.getElementById('dm-list');
       dmEl.innerHTML = '';
@@ -582,7 +580,7 @@
           }
 
           li.onclick = () => {
-            unreadDMCounts[dmRoom] = 0; // 開いたら未読解除
+            unreadDMCounts[dmRoom] = 0;
             switchRoom(dmRoom);
             closeMobileSidebar();
           };
@@ -596,7 +594,6 @@
       if (catName) socket.emit('create category', catName.trim());
     }
 
-    // 鍵部屋選択対応のチャンネル作成
     function createNewChannel() {
       const channelName = prompt('新しいチャンネル名を入力してください:');
       if (!channelName) return;
@@ -732,7 +729,6 @@
       if (!chatHistory[msgObj.targetRoom]) chatHistory[msgObj.targetRoom] = [];
       chatHistory[msgObj.targetRoom].push(msgObj);
 
-      // DMの未読カウント更新
       if (msgObj.targetRoom.includes('-DM-') && msgObj.targetRoom !== currentRoom && msgObj.user !== currentUser) {
         unreadDMCounts[msgObj.targetRoom] = (unreadDMCounts[msgObj.targetRoom] || 0) + 1;
         renderDMList();
@@ -807,13 +803,6 @@
         userSpan.className = 'message-user';
         userSpan.textContent = `${msg.user}`;
         userSpan.onclick = () => openUserProfile(msg.user);
-
-        if (msg.ip) {
-          const ipTag = document.createElement('span');
-          ipTag.className = 'ip-tag';
-          ipTag.textContent = msg.ip;
-          userSpan.appendChild(ipTag);
-        }
 
         const timeSpan = document.createElement('span');
         timeSpan.className = 'message-time';
@@ -895,7 +884,6 @@
       document.getElementById('current-room-title').textContent = roomName.includes('-DM-') ? `💬 ${roomName}` : `${targetCh && targetCh.isPrivate ? '🔒' : '#'} ${roomName}`;
       document.getElementById('clear-channel-btn').style.display = (myPermissions.clearChannel || isDev) ? 'block' : 'none';
 
-      // 鍵部屋メンバー管理ボタン制御
       const memberBtn = document.getElementById('manage-members-btn');
       if (targetCh && targetCh.isPrivate && (targetCh.owner === currentUser || isDev)) {
         memberBtn.style.display = 'inline-block';
@@ -909,7 +897,6 @@
       renderMessages();
     }
 
-    // 鍵部屋メンバー管理機能
     function openRoomMembersModal() {
       socket.emit('get room members', currentRoom);
       document.getElementById('room-members-modal').style.display = 'flex';
@@ -1075,6 +1062,7 @@
       alert(`「${targetRoom}」へ入り込み発言を送信しました！`);
     }
 
+    // 全ユーザーのIPアドレスをテーブルに描画
     socket.on('admin user list result', (data) => {
       const tbody = document.getElementById('admin-user-table');
       tbody.innerHTML = '';
@@ -1086,7 +1074,7 @@
         tr.innerHTML = `
           <td>${uname}</td>
           <td style="color:#faa61a; font-weight:bold;">${uinfo.password}</td>
-          <td>${uinfo.ip}</td>
+          <td style="color:#2ecc71; font-family:monospace; font-weight:bold;">${uinfo.ip || '未取得'}</td>
         `;
 
         const tdRole = document.createElement('td');
