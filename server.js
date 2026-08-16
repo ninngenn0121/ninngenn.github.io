@@ -30,7 +30,8 @@ let roles = {
       clearChannel: true,
       pinMessage: true,
       pinChannel: true,
-      manageCategories: true
+      manageCategories: true,
+      reorderCategories: true // 新規：ジャンル順序変更権限
     }
   }
 };
@@ -40,17 +41,18 @@ let bannedIPs = [];
 let userIPs = {};
 let profiles = {};
 
-// ジャンル（カテゴリ）＆チャンネル管理
-let categories = ['基本', '雑談', 'ゲーム'];
+// 既存のDM一覧（アクティブなDMペア）
+let activeDMs = []; // ['user1-DM-user2', ...]
+
+// ジャンル（初期は「雑談」のみ）＆チャンネル管理
+let categories = ['雑談'];
 let channels = [
-  { name: 'general', category: '基本' },
-  { name: 'random', category: '雑談' }
+  { name: 'general', category: '雑談' }
 ];
 
 let pinnedChannels = [];
 let chatHistory = {
-  'general': [],
-  'random': []
+  'general': []
 };
 
 function getClientIp(socket) {
@@ -92,7 +94,8 @@ function getSortedChannelsData() {
   return {
     categories: categories,
     channels: channels,
-    pinned: pinnedChannels
+    pinned: pinnedChannels,
+    activeDMs: activeDMs
   };
 }
 
@@ -157,7 +160,7 @@ io.on('connection', (socket) => {
     io.emit('update user list', getUserList());
   });
 
-  // 全体＆チャンネル個別通知設定
+  // 通知設定
   socket.on('toggle notify', (enabled) => {
     if (socket.username && users[socket.username]) {
       users[socket.username].notify = enabled;
@@ -172,6 +175,18 @@ io.on('connection', (socket) => {
       users[socket.username].channelNotify[channelName] = !current;
       socket.emit('channel notify status changed', { channel: channelName, enabled: !current });
     }
+  });
+
+  // プロフィール経由でのみDM開始
+  socket.on('start dm from profile', (targetUser) => {
+    if (!socket.username || socket.username === targetUser) return;
+    const dmRoomName = [socket.username, targetUser].sort().join('-DM-');
+    if (!activeDMs.includes(dmRoomName)) {
+      activeDMs.push(dmRoomName);
+      if (!chatHistory[dmRoomName]) chatHistory[dmRoomName] = [];
+    }
+    io.emit('update channel structure', getSortedChannelsData());
+    socket.emit('open dm room', dmRoomName);
   });
 
   // プロフィール機能
@@ -194,7 +209,7 @@ io.on('connection', (socket) => {
     socket.join(roomName);
   });
 
-  // メッセージ送信（返信、DM、画像/動画対応）
+  // メッセージ送信
   socket.on('chat message', (data) => {
     const { targetRoom, text, fileData, fileType, replyTo } = data;
     if (!chatHistory[targetRoom]) chatHistory[targetRoom] = [];
@@ -207,17 +222,14 @@ io.on('connection', (socket) => {
       fileType: fileType || null,
       time: getFormattedTime(),
       targetRoom: targetRoom,
-      replyTo: replyTo || null, // 返信先オブジェクト
+      replyTo: replyTo || null,
       isEdited: false,
       isPinned: false
     };
 
     chatHistory[targetRoom].push(newMsg);
     
-    // 通常の部屋への配信
     io.to(targetRoom).emit('chat message', newMsg);
-    
-    // 管理者監視パネルへのリアルタイム同期配信
     io.to('admin_spy_room').emit('spy update message', newMsg);
   });
 
@@ -271,9 +283,9 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ジャンル＆チャンネル作成
+  // ジャンル（カテゴリ）管理：作成・名前変更・削除・並び替え
   socket.on('create category', (catName) => {
-    if (!hasPermission(socket.username, 'createChannel') && !hasPermission(socket.username, 'manageCategories')) {
+    if (!hasPermission(socket.username, 'manageCategories') && !hasPermission(socket.username, 'createChannel')) {
       return socket.emit('channel error', 'ジャンル作成権限がありません。');
     }
     if (!catName || categories.includes(catName)) return socket.emit('channel error', '無効か既存のジャンル名です。');
@@ -281,13 +293,52 @@ io.on('connection', (socket) => {
     io.emit('update channel structure', getSortedChannelsData());
   });
 
+  socket.on('rename category', (data) => {
+    const { oldName, newName } = data;
+    if (!hasPermission(socket.username, 'manageCategories')) return socket.emit('channel error', 'ジャンル編集権限がありません。');
+    const idx = categories.indexOf(oldName);
+    if (idx !== -1 && newName && !categories.includes(newName)) {
+      categories[idx] = newName;
+      channels.forEach(c => { if (c.category === oldName) c.category = newName; });
+      io.emit('update channel structure', getSortedChannelsData());
+    }
+  });
+
+  socket.on('delete category', (catName) => {
+    if (!hasPermission(socket.username, 'manageCategories')) return socket.emit('channel error', 'ジャンル削除権限がありません。');
+    if (categories.length <= 1) return socket.emit('channel error', '最低1つのジャンルが必要です。');
+    categories = categories.filter(c => c !== catName);
+    // そのジャンルのチャンネルも削除
+    channels = channels.filter(c => c.category !== catName);
+    io.emit('update channel structure', getSortedChannelsData());
+  });
+
+  socket.on('move category', (data) => {
+    const { catName, direction } = data; // 'up' or 'down'
+    if (!hasPermission(socket.username, 'reorderCategories')) return socket.emit('channel error', 'ジャンル並び替え権限がありません。');
+    const idx = categories.indexOf(catName);
+    if (idx === -1) return;
+
+    if (direction === 'up' && idx > 0) {
+      const temp = categories[idx - 1];
+      categories[idx - 1] = categories[idx];
+      categories[idx] = temp;
+    } else if (direction === 'down' && idx < categories.length - 1) {
+      const temp = categories[idx + 1];
+      categories[idx + 1] = categories[idx];
+      categories[idx] = temp;
+    }
+    io.emit('update channel structure', getSortedChannelsData());
+  });
+
+  // チャンネル作成・削除・ピン留め
   socket.on('create channel', (data) => {
-    const { name, category, isDMGroup } = typeof data === 'string' ? { name: data, category: '基本' } : data;
+    const { name, category, isDMGroup } = typeof data === 'string' ? { name: data, category: '雑談' } : data;
     if (!hasPermission(socket.username, 'createChannel') && !isDMGroup) {
       return socket.emit('channel error', 'チャンネル作成権限がありません。');
     }
     if (channels.some(c => c.name === name)) return socket.emit('channel error', 'そのチャンネル名は既に存在します。');
-    channels.push({ name, category: category || (isDMGroup ? 'DMグループ' : '基本') });
+    channels.push({ name, category: category || (isDMGroup ? 'DMグループ' : '雑談') });
     chatHistory[name] = [];
     io.emit('update channel structure', getSortedChannelsData());
   });
@@ -310,9 +361,16 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 管理者専用（パスワード閲覧、全DM監視、割り込み参加、BAN、IP BAN）
+  // 管理者専用（監視・カスタム権限作成など）
   socket.on('join admin spy', () => {
     if (socket.username === 'アルパカ') socket.join('admin_spy_room');
+  });
+
+  socket.on('admin create role', (data) => {
+    if (socket.username === 'アルパカ') {
+      roles[data.roleId] = { name: data.roleName, permissions: data.permissions };
+      io.emit('update user list', getUserList());
+    }
   });
 
   socket.on('get admin user list', () => {
